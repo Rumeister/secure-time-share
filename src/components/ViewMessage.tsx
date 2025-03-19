@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { decryptMessage, importKey } from "@/lib/encryption";
-import { getMessageById, incrementMessageViews, isMessageExpired, deleteMessage } from "@/lib/storage";
+import { getMessage, incrementMessageViews, isMessageExpired, deleteMessage } from "@/lib/storage";
 
 const ViewMessage = () => {
   const { id } = useParams<{ id: string }>();
@@ -30,7 +30,7 @@ const ViewMessage = () => {
       
       try {
         // Get encrypted message from storage
-        const message = getMessageById(id);
+        const message = getMessage(id);
         
         if (!message) {
           setError("Message not found. It may have been deleted or expired.");

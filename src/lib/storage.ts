@@ -1,4 +1,5 @@
-interface MessageData {
+
+export interface MessageData {
   id: string;
   encryptedContent: string;
   expiresAt: number | null;
@@ -86,7 +87,7 @@ export const getMessage = (id: string): MessageData | undefined => {
 /**
  * Updates a message in localStorage
  */
-const updateMessage = (updatedMessage: MessageData) => {
+export const updateMessage = (updatedMessage: MessageData) => {
   const messages = getAllMessages();
   const updatedMessages = messages.map(message =>
     message.id === updatedMessage.id ? updatedMessage : message
@@ -107,7 +108,7 @@ const updateMessage = (updatedMessage: MessageData) => {
 /**
  * Deletes a message from localStorage
  */
-const deleteMessage = (id: string) => {
+export const deleteMessage = (id: string) => {
   const messages = getAllMessages();
   const updatedMessages = messages.filter(message => message.id !== id);
   localStorage.setItem('secureMessages', JSON.stringify(updatedMessages));
@@ -122,9 +123,9 @@ const deleteMessage = (id: string) => {
 };
 
 /**
- * Increments the view count of a message
+ * Increments the view count of a message and returns the updated message
  */
-export const incrementViewCount = (id: string) => {
+export const incrementMessageViews = (id: string): MessageData | undefined => {
   const message = getMessage(id);
   if (message) {
     const updatedMessage: MessageData = {
@@ -132,7 +133,9 @@ export const incrementViewCount = (id: string) => {
       currentViews: message.currentViews + 1,
     };
     updateMessage(updatedMessage);
+    return updatedMessage;
   }
+  return undefined;
 };
 
 /**

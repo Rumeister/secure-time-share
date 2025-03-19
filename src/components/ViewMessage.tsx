@@ -4,7 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
 import { LockKeyhole, ShieldAlert, Clock, Eye, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { decryptMessage, importKey } from "@/lib/encryption";
 import { getMessageById, incrementMessageViews, isMessageExpired, deleteMessage } from "@/lib/storage";

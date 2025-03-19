@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { LockKeyhole, Shield, Clock, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
+import { useUser, UserButton } from "@clerk/clerk-react";
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,6 +13,7 @@ interface LayoutProps {
 const Layout = ({ children }: LayoutProps) => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isSignedIn } = useUser();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -57,12 +59,34 @@ const Layout = ({ children }: LayoutProps) => {
               >
                 Create
               </Link>
-              <Button asChild size="sm" className="ml-4">
-                <Link to="/create">
-                  <LockKeyhole className="mr-2 h-4 w-4" />
-                  Share Securely
-                </Link>
-              </Button>
+              {isSignedIn ? (
+                <>
+                  <Link 
+                    to="/dashboard" 
+                    className="text-sm font-medium text-muted-foreground transition-all-200 hover:text-foreground"
+                  >
+                    Dashboard
+                  </Link>
+                  <UserButton 
+                    appearance={{
+                      elements: {
+                        userButtonBox: "h-8 w-8",
+                        userButtonTrigger: "h-8 w-8 rounded-full",
+                        userButtonAvatarBox: "h-full w-full",
+                      }
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to="/sign-in">Sign In</Link>
+                  </Button>
+                  <Button asChild size="sm">
+                    <Link to="/sign-up">Sign Up</Link>
+                  </Button>
+                </>
+              )}
             </nav>
             
             {/* Mobile Menu Button */}
@@ -101,14 +125,41 @@ const Layout = ({ children }: LayoutProps) => {
               >
                 Create
               </Link>
-              <div className="pt-4 pb-2">
-                <Button asChild className="w-full" size="sm">
-                  <Link to="/create" onClick={() => setMobileMenuOpen(false)}>
-                    <LockKeyhole className="mr-2 h-4 w-4" />
-                    Share Securely
+              {isSignedIn ? (
+                <>
+                  <Link 
+                    to="/dashboard" 
+                    className="block px-3 py-2 text-base font-medium text-foreground rounded-md"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Dashboard
                   </Link>
-                </Button>
-              </div>
+                  <div className="py-2 px-3">
+                    <UserButton 
+                      appearance={{
+                        elements: {
+                          userButtonBox: "h-8 w-8",
+                          userButtonTrigger: "h-8 w-8 rounded-full",
+                          userButtonAvatarBox: "h-full w-full",
+                        }
+                      }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="pt-4 pb-2 space-y-2">
+                  <Button asChild className="w-full justify-center" size="sm" variant="ghost">
+                    <Link to="/sign-in" onClick={() => setMobileMenuOpen(false)}>
+                      Sign In
+                    </Link>
+                  </Button>
+                  <Button asChild className="w-full justify-center" size="sm">
+                    <Link to="/sign-up" onClick={() => setMobileMenuOpen(false)}>
+                      Sign Up
+                    </Link>
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -131,6 +182,21 @@ const Layout = ({ children }: LayoutProps) => {
               </p>
             </div>
             <div className="flex gap-4">
+              {isSignedIn ? (
+                <Link 
+                  to="/dashboard" 
+                  className="text-xs text-muted-foreground transition-all-200 hover:text-foreground"
+                >
+                  Dashboard
+                </Link>
+              ) : (
+                <Link 
+                  to="/sign-in" 
+                  className="text-xs text-muted-foreground transition-all-200 hover:text-foreground"
+                >
+                  Sign In
+                </Link>
+              )}
               <Link 
                 to="/create" 
                 className="text-xs text-muted-foreground transition-all-200 hover:text-foreground"

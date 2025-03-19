@@ -1,99 +1,166 @@
-
-/**
- * Local storage utility for encrypted messages
- */
-
-export interface EncryptedMessage {
+interface MessageData {
   id: string;
   encryptedContent: string;
-  expiresAt: number | null; // Unix timestamp in milliseconds
+  expiresAt: number | null;
   maxViews: number | null;
   currentViews: number;
-  createdAt: number; // Unix timestamp in milliseconds
+  createdAt: number;
 }
 
-const STORAGE_KEY = "secure_messages";
-
-// Get all stored messages
-export const getStoredMessages = (): EncryptedMessage[] => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) return [];
-  
+/**
+ * Gets all messages from localStorage
+ */
+const getAllMessages = (): MessageData[] => {
   try {
-    return JSON.parse(stored);
+    const messagesString = localStorage.getItem('secureMessages');
+    if (!messagesString) return [];
+    
+    const messages = JSON.parse(messagesString);
+    return Array.isArray(messages) ? messages : [];
   } catch (error) {
-    console.error("Error parsing stored messages:", error);
+    console.error('Error getting messages:', error);
     return [];
   }
 };
 
-// Get a specific message by ID
-export const getMessageById = (id: string): EncryptedMessage | null => {
-  const messages = getStoredMessages();
-  const message = messages.find(msg => msg.id === id);
-  return message || null;
-};
-
-// Save a message to storage
-export const saveMessage = (message: EncryptedMessage): void => {
-  const messages = getStoredMessages();
+/**
+ * Saves a message to localStorage
+ */
+export const saveMessage = (message: MessageData) => {
+  const messages = getAllMessages();
   messages.push(message);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-};
-
-// Update a message in storage
-export const updateMessage = (updatedMessage: EncryptedMessage): void => {
-  const messages = getStoredMessages();
-  const index = messages.findIndex(msg => msg.id === updatedMessage.id);
+  localStorage.setItem('secureMessages', JSON.stringify(messages));
   
-  if (index !== -1) {
-    messages[index] = updatedMessage;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+  // If user is signed in, also save to user's messages
+  const userId = getUserId();
+  if (userId) {
+    const userMessages = getUserMessages();
+    userMessages.push(message);
+    localStorage.setItem(`userMessages_${userId}`, JSON.stringify(userMessages));
   }
 };
 
-// Delete a message from storage
-export const deleteMessage = (id: string): void => {
-  const messages = getStoredMessages();
-  const updatedMessages = messages.filter(msg => msg.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedMessages));
+/**
+ * Gets the current user ID if signed in
+ */
+export const getUserId = (): string | null => {
+  try {
+    const userString = localStorage.getItem('clerk-user');
+    if (!userString) return null;
+    
+    const user = JSON.parse(userString);
+    return user?.id || null;
+  } catch (error) {
+    console.error('Error getting user ID:', error);
+    return null;
+  }
 };
 
-// Check if a message is expired
-export const isMessageExpired = (message: EncryptedMessage): boolean => {
-  // Check time expiration
-  if (message.expiresAt && Date.now() > message.expiresAt) {
-    return true;
-  }
+/**
+ * Gets all messages for the current user
+ */
+export const getUserMessages = (): MessageData[] => {
+  const userId = getUserId();
+  if (!userId) return [];
   
-  // Check view count expiration
+  try {
+    const userMessagesString = localStorage.getItem(`userMessages_${userId}`);
+    if (!userMessagesString) return [];
+    
+    const userMessages = JSON.parse(userMessagesString);
+    return Array.isArray(userMessages) ? userMessages : [];
+  } catch (error) {
+    console.error('Error getting user messages:', error);
+    return [];
+  }
+};
+
+/**
+ * Retrieves a message by ID from localStorage
+ */
+export const getMessage = (id: string): MessageData | undefined => {
+  const messages = getAllMessages();
+  return messages.find(message => message.id === id);
+};
+
+/**
+ * Updates a message in localStorage
+ */
+const updateMessage = (updatedMessage: MessageData) => {
+  const messages = getAllMessages();
+  const updatedMessages = messages.map(message =>
+    message.id === updatedMessage.id ? updatedMessage : message
+  );
+  localStorage.setItem('secureMessages', JSON.stringify(updatedMessages));
+  
+  // If user is signed in, also update in user's messages
+  const userId = getUserId();
+  if (userId) {
+    const userMessages = getUserMessages();
+    const updatedUserMessages = userMessages.map(message =>
+      message.id === updatedMessage.id ? updatedMessage : message
+    );
+    localStorage.setItem(`userMessages_${userId}`, JSON.stringify(updatedUserMessages));
+  }
+};
+
+/**
+ * Deletes a message from localStorage
+ */
+const deleteMessage = (id: string) => {
+  const messages = getAllMessages();
+  const updatedMessages = messages.filter(message => message.id !== id);
+  localStorage.setItem('secureMessages', JSON.stringify(updatedMessages));
+  
+  // If user is signed in, also delete from user's messages
+  const userId = getUserId();
+  if (userId) {
+    const userMessages = getUserMessages();
+    const updatedUserMessages = userMessages.filter(message => message.id !== id);
+    localStorage.setItem(`userMessages_${userId}`, JSON.stringify(updatedUserMessages));
+  }
+};
+
+/**
+ * Increments the view count of a message
+ */
+export const incrementViewCount = (id: string) => {
+  const message = getMessage(id);
+  if (message) {
+    const updatedMessage: MessageData = {
+      ...message,
+      currentViews: message.currentViews + 1,
+    };
+    updateMessage(updatedMessage);
+  }
+};
+
+/**
+ * Checks if a message has expired based on maxViews or expiresAt
+ */
+export const isMessageExpired = (message: MessageData): boolean => {
   if (message.maxViews !== null && message.currentViews >= message.maxViews) {
     return true;
   }
-  
+  if (message.expiresAt !== null && Date.now() > message.expiresAt) {
+    return true;
+  }
   return false;
 };
 
-// Clean up expired messages
-export const cleanupExpiredMessages = (): void => {
-  const messages = getStoredMessages();
-  const validMessages = messages.filter(msg => !isMessageExpired(msg));
+/**
+ * Cleans up expired messages from localStorage
+ */
+export const cleanupExpiredMessages = () => {
+  const messages = getAllMessages();
+  const validMessages = messages.filter(message => !isMessageExpired(message));
   
-  if (validMessages.length !== messages.length) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(validMessages));
-  }
-};
+  // Delete expired messages
+  messages.forEach(message => {
+    if (isMessageExpired(message)) {
+      deleteMessage(message.id);
+    }
+  });
 
-// Increment view count for a message
-export const incrementMessageViews = (id: string): EncryptedMessage | null => {
-  const message = getMessageById(id);
-  if (!message) return null;
-  
-  const updatedMessage = {
-    ...message,
-    currentViews: message.currentViews + 1,
-  };
-  
-  updateMessage(updatedMessage);
-  return updatedMessage;
+  localStorage.setItem('secureMessages', JSON.stringify(validMessages));
 };

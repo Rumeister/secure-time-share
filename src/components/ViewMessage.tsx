@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
@@ -58,25 +57,32 @@ const ViewMessage = () => {
         // Import the key
         const key = await importKey(keyFragment);
         
-        // Decrypt the message
-        const decrypted = await decryptMessage(message.encryptedContent, key);
-        
-        // Update view count
-        const updatedMessage = incrementMessageViews(id);
-        
-        if (updatedMessage) {
-          // Set expiry info
-          if (updatedMessage.maxViews !== null) {
-            const remainingViews = updatedMessage.maxViews - updatedMessage.currentViews;
-            setExpiryInfo(`This message will be deleted ${remainingViews <= 0 ? 'after this view' : `after ${remainingViews} more view${remainingViews !== 1 ? 's' : ''}`}.`);
-          } else if (updatedMessage.expiresAt) {
-            const expiryDate = new Date(updatedMessage.expiresAt);
-            setExpiryInfo(`This message will expire on ${expiryDate.toLocaleString()}.`);
+        try {
+          // Decrypt the message with enhanced encryption
+          const decrypted = await decryptMessage(message.encryptedContent, key);
+          
+          // Update view count
+          const updatedMessage = incrementMessageViews(id);
+          
+          if (updatedMessage) {
+            // Set expiry info
+            if (updatedMessage.maxViews !== null) {
+              const remainingViews = updatedMessage.maxViews - updatedMessage.currentViews;
+              setExpiryInfo(`This message will be deleted ${remainingViews <= 0 ? 'after this view' : `after ${remainingViews} more view${remainingViews !== 1 ? 's' : ''}`}.`);
+            } else if (updatedMessage.expiresAt) {
+              const expiryDate = new Date(updatedMessage.expiresAt);
+              setExpiryInfo(`This message will expire on ${expiryDate.toLocaleString()}.`);
+            }
           }
+          
+          // Set the decrypted message
+          setDecryptedMessage(decrypted);
+        } catch (error) {
+          console.error("Decryption error:", error);
+          setError("Failed to decrypt the message. This might be due to an incorrect key or the message was encrypted with a different version of the app.");
+          setLoading(false);
+          return;
         }
-        
-        // Set the decrypted message
-        setDecryptedMessage(decrypted);
         
         // Clear URL fragment for security
         if (history.replaceState) {

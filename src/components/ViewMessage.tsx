@@ -1,17 +1,14 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useSearchParams } from "react-router-dom";
 import { LockKeyhole, ShieldAlert, Clock, Eye, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { decryptMessage, importKey } from "@/lib/encryption";
 import { getMessage, incrementMessageViews, isMessageExpired, deleteMessage } from "@/lib/storage";
 
 const ViewMessage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   
   const [decryptedMessage, setDecryptedMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +43,7 @@ const ViewMessage = () => {
         }
         
         // Get the key from URL fragment
-        const keyFragment = window.location.hash.substring(1);
+        let keyFragment = window.location.hash.substring(1);
         
         if (!keyFragment) {
           setError("Missing decryption key. The URL may be incomplete.");
@@ -54,10 +51,13 @@ const ViewMessage = () => {
           return;
         }
         
-        // Import the key
-        const key = await importKey(keyFragment);
+        // Clean the key fragment - remove any leading/trailing whitespace
+        keyFragment = keyFragment.trim();
         
         try {
+          // Import the key with error handling
+          const key = await importKey(keyFragment);
+          
           // Decrypt the message with enhanced encryption
           const decrypted = await decryptMessage(message.encryptedContent, key);
           
@@ -86,7 +86,7 @@ const ViewMessage = () => {
         
         // Clear URL fragment for security
         if (history.replaceState) {
-          history.replaceState(null, "", window.location.pathname);
+          history.replaceState(null, "", window.location.pathname + window.location.search);
         }
       } catch (error) {
         console.error("Error viewing message:", error);

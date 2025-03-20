@@ -40,22 +40,33 @@ export const generateKey = async (): Promise<CryptoKey> => {
 // Export the key to base64 string for sharing
 export const exportKey = async (key: CryptoKey): Promise<string> => {
   const exported = await window.crypto.subtle.exportKey("raw", key);
-  return btoa(ab2str(exported));
+  // Use URL-safe base64 encoding to avoid issues with URLs
+  return btoa(ab2str(exported)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
 
 // Import a key from base64 string
 export const importKey = async (keyStr: string): Promise<CryptoKey> => {
-  const keyBuffer = str2ab(atob(keyStr));
-  return window.crypto.subtle.importKey(
-    "raw",
-    keyBuffer,
-    {
-      name: "AES-GCM",
-      length: 256,
-    },
-    false,
-    ["encrypt", "decrypt"]
-  );
+  try {
+    // Handle URL-safe base64 encoding
+    const safeKeyStr = keyStr.replace(/-/g, '+').replace(/_/g, '/');
+    // Add padding if needed
+    const paddedKeyStr = safeKeyStr.padEnd(safeKeyStr.length + (4 - safeKeyStr.length % 4) % 4, '=');
+    
+    const keyBuffer = str2ab(atob(paddedKeyStr));
+    return window.crypto.subtle.importKey(
+      "raw",
+      keyBuffer,
+      {
+        name: "AES-GCM",
+        length: 256,
+      },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  } catch (error) {
+    console.error("Error importing key:", error);
+    throw new Error("Invalid encryption key format");
+  }
 };
 
 // Generate a secure salt for key derivation
@@ -119,14 +130,19 @@ export const encryptMessage = async (message: string, key: CryptoKey): Promise<s
   combined.set(iv, salt.length);
   combined.set(new Uint8Array(ciphertext), salt.length + iv.length);
   
-  // Return as base64 string
-  return btoa(ab2str(combined.buffer));
+  // Return as URL-safe base64 string
+  return btoa(ab2str(combined.buffer)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
 
 // Decrypt a message with forward secrecy
 export const decryptMessage = async (encryptedMessage: string, key: CryptoKey): Promise<string> => {
   try {
-    const combined = str2ab(atob(encryptedMessage));
+    // Handle URL-safe base64 encoding
+    const safeMessage = encryptedMessage.replace(/-/g, '+').replace(/_/g, '/');
+    // Add padding if needed
+    const paddedMessage = safeMessage.padEnd(safeMessage.length + (4 - safeMessage.length % 4) % 4, '=');
+    
+    const combined = str2ab(atob(paddedMessage));
     
     // Extract salt, IV and ciphertext
     const salt = new Uint8Array(combined.slice(0, 16));
@@ -149,7 +165,7 @@ export const decryptMessage = async (encryptedMessage: string, key: CryptoKey): 
     return new TextDecoder().decode(decrypted);
   } catch (error) {
     console.error("Decryption error:", error);
-    throw new Error("Failed to decrypt the message. The key may be incorrect.");
+    throw new Error("Failed to decrypt the message. The key may be incorrect or the message format is invalid.");
   }
 };
 

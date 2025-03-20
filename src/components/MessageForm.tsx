@@ -37,11 +37,16 @@ const MessageForm = () => {
   };
   
   const handleCopyLink = async () => {
-    await navigator.clipboard.writeText(shareLink);
-    setCopied(true);
-    toast.success("Link copied to clipboard!");
-    
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      toast.success("Link copied to clipboard!");
+      
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Error copying to clipboard:", error);
+      toast.error("Failed to copy link. Please select and copy it manually.");
+    }
   };
   
   const handleCreateMessage = async () => {
@@ -93,6 +98,7 @@ const MessageForm = () => {
       });
       
       // Generate share link with the key in the fragment
+      // Use origin to ensure we get the proper base URL
       const baseUrl = window.location.origin;
       const shareUrl = `${baseUrl}/view/${id}#${exportedKey}`;
       

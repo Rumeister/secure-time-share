@@ -1,11 +1,12 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { LockKeyhole, ShieldAlert, Clock, Eye, Copy, Check } from "lucide-react";
+import { LockKeyhole, ShieldAlert, Clock, Eye, Copy, Check, Bug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { decryptMessage, importKey } from "@/lib/encryption";
 import { getMessage, incrementMessageViews, isMessageExpired, deleteMessage } from "@/lib/storage";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const ViewMessage = () => {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +17,14 @@ const ViewMessage = () => {
   const [error, setError] = useState<string | null>(null);
   const [expiryInfo, setExpiryInfo] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
+  
+  // Add a debug log function
+  const addDebugInfo = (message: string) => {
+    setDebugInfo(prev => [...prev, `${new Date().toISOString().substring(11, 23)}: ${message}`]);
+    console.log("DEBUG:", message);
+  };
   
   useEffect(() => {
     const decryptAndViewMessage = async () => {
@@ -26,6 +35,8 @@ const ViewMessage = () => {
       }
       
       try {
+        addDebugInfo(`Starting decryption process for message ID: ${id}`);
+        
         // Get encrypted message from storage
         const message = getMessage(id);
         
@@ -35,6 +46,9 @@ const ViewMessage = () => {
           return;
         }
         
+        addDebugInfo(`Message found in storage, created at: ${new Date(message.createdAt).toLocaleString()}`);
+        addDebugInfo(`Encrypted content length: ${message.encryptedContent.length}`);
+        
         // Check if message is expired
         if (isMessageExpired(message)) {
           deleteMessage(id);
@@ -43,11 +57,12 @@ const ViewMessage = () => {
           return;
         }
         
-        // Get the key from URL fragment
+        // Check for URL fragment (key)
         let keyFragment = window.location.hash.substring(1);
         
         if (!keyFragment) {
           setError("Missing decryption key. The URL may be incomplete.");
+          addDebugInfo("No key fragment found in URL hash");
           setLoading(false);
           return;
         }
@@ -55,15 +70,18 @@ const ViewMessage = () => {
         // Clean the key fragment - remove any leading/trailing whitespace
         keyFragment = keyFragment.trim();
         
-        console.log("Processing message with ID:", id);
-        console.log("Key fragment length:", keyFragment.length);
+        addDebugInfo(`Key fragment found, length: ${keyFragment.length}`);
         
         try {
           // Import the key with error handling
+          addDebugInfo("Attempting to import key...");
           const key = await importKey(keyFragment);
+          addDebugInfo("Key imported successfully");
           
           // Decrypt the message with enhanced encryption
+          addDebugInfo("Attempting to decrypt message...");
           const decrypted = await decryptMessage(message.encryptedContent, key);
+          addDebugInfo(`Message decrypted successfully, length: ${decrypted.length}`);
           
           // Update view count
           const updatedMessage = incrementMessageViews(id);
@@ -81,21 +99,34 @@ const ViewMessage = () => {
           
           // Set the decrypted message
           setDecryptedMessage(decrypted);
+          
+          // Clear URL fragment for security but preserve the path and query
+          if (window.history.replaceState) {
+            const { pathname, search } = window.location;
+            window.history.replaceState(null, "", pathname + search);
+            addDebugInfo("URL fragment cleared for security");
+          }
         } catch (error) {
           console.error("Decryption error:", error);
-          setError("Failed to decrypt the message. This might be due to an incorrect key or the message was encrypted with a different version of the app.");
+          if (error instanceof Error) {
+            setError(`Failed to decrypt the message. ${error.message}`);
+            addDebugInfo(`Decryption error: ${error.message}`);
+          } else {
+            setError("Failed to decrypt the message. This might be due to an incorrect key or the message was encrypted with a different version of the app.");
+            addDebugInfo("Unknown decryption error");
+          }
           setLoading(false);
           return;
         }
-        
-        // Clear URL fragment for security but preserve the path and query
-        if (window.history.replaceState) {
-          const { pathname, search } = window.location;
-          window.history.replaceState(null, "", pathname + search);
-        }
       } catch (error) {
         console.error("Error viewing message:", error);
-        setError("Failed to decrypt the message. The key may be incorrect.");
+        if (error instanceof Error) {
+          setError(`Failed to decrypt the message. ${error.message}`);
+          addDebugInfo(`Error viewing message: ${error.message}`);
+        } else {
+          setError("Failed to decrypt the message. The key may be incorrect.");
+          addDebugInfo("Unknown error viewing message");
+        }
       } finally {
         setLoading(false);
       }
@@ -141,6 +172,26 @@ const ViewMessage = () => {
           <h2 className="text-2xl font-semibold tracking-tight">Message Unavailable</h2>
           <p className="text-muted-foreground">{error}</p>
         </div>
+        
+        <Collapsible>
+          <div className="flex justify-center">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" onClick={() => setShowDebug(!showDebug)} className="text-xs flex items-center">
+                <Bug className="mr-1 h-3.5 w-3.5" />
+                {showDebug ? "Hide Debug Info" : "Show Debug Info"}
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+          
+          <CollapsibleContent>
+            <div className="mt-4 p-3 bg-black/5 rounded text-xs font-mono h-40 overflow-auto">
+              {debugInfo.length > 0 ? debugInfo.map((log, i) => (
+                <div key={i}>{log}</div>
+              )) : "No debug information available"}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+        
         <div className="flex justify-center pt-4">
           <Button onClick={() => navigate("/create")}>Create a New Message</Button>
         </div>
@@ -186,6 +237,25 @@ const ViewMessage = () => {
           </p>
           {expiryInfo && <p>{expiryInfo}</p>}
         </div>
+        
+        <Collapsible>
+          <div className="flex justify-center mb-4">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" onClick={() => setShowDebug(!showDebug)} className="text-xs flex items-center">
+                <Bug className="mr-1 h-3.5 w-3.5" />
+                {showDebug ? "Hide Debug Info" : "Show Debug Info"}
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+          
+          <CollapsibleContent>
+            <div className="mb-4 p-3 bg-black/5 rounded text-xs font-mono h-40 overflow-auto">
+              {debugInfo.length > 0 ? debugInfo.map((log, i) => (
+                <div key={i}>{log}</div>
+              )) : "No debug information available"}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
         
         <div className="flex justify-between">
           <Button variant="outline" onClick={() => window.history.back()}>

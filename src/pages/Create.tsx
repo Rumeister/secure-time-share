@@ -1,10 +1,15 @@
 
 import Layout from "@/components/Layout";
 import MessageForm from "@/components/MessageForm";
-import { useEffect } from "react";
+import EncryptionTester from "@/components/EncryptionTester";
+import { useEffect, useState } from "react";
 import { cleanupExpiredMessages } from "@/lib/storage";
+import { Button } from "@/components/ui/button";
+import { Bug } from "lucide-react";
 
 const Create = () => {
+  const [showTester, setShowTester] = useState(false);
+  
   useEffect(() => {
     // Clean up any expired messages on page load
     cleanupExpiredMessages();
@@ -22,7 +27,20 @@ const Create = () => {
               Your message will be encrypted right in your browser before being stored. 
               Only someone with the share link can decrypt and read it.
             </p>
+            <div className="mt-4">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowTester(!showTester)}
+                className="flex items-center text-xs"
+              >
+                <Bug className="mr-1 h-3.5 w-3.5" />
+                {showTester ? "Hide Encryption Tester" : "Debug Encryption"}
+              </Button>
+            </div>
           </div>
+          
+          {showTester && <EncryptionTester />}
           
           <MessageForm />
         </div>

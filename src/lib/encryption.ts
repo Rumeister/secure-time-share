@@ -37,43 +37,53 @@ export const generateKey = async (): Promise<CryptoKey> => {
   );
 };
 
+// Properly base64 encode with URL safety
+const base64UrlEncode = (arrayBuffer: ArrayBuffer): string => {
+  const base64 = btoa(ab2str(arrayBuffer));
+  // Make base64 URL-safe
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+// Properly decode URL-safe base64
+const base64UrlDecode = (base64Url: string): ArrayBuffer => {
+  // Add padding if needed
+  let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4) {
+    base64 += '=';
+  }
+  
+  try {
+    return str2ab(atob(base64));
+  } catch (error) {
+    console.error("Base64 decoding error:", error);
+    throw new Error("Invalid base64 format");
+  }
+};
+
 // Export the key to base64 string for sharing
 export const exportKey = async (key: CryptoKey): Promise<string> => {
   const exported = await window.crypto.subtle.exportKey("raw", key);
-  // Use URL-safe base64 encoding to avoid issues with URLs
-  return btoa(ab2str(exported)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  // Use URL-safe base64 encoding
+  return base64UrlEncode(exported);
 };
 
 // Import a key from base64 string
 export const importKey = async (keyStr: string): Promise<CryptoKey> => {
   try {
+    console.log("Importing key, input length:", keyStr.length);
+    
     // Make sure to trim any whitespace from the key
     const trimmedKeyStr = keyStr.trim();
+    console.log("After trimming, length:", trimmedKeyStr.length);
     
-    // Handle URL-safe base64 encoding
-    const safeKeyStr = trimmedKeyStr.replace(/-/g, '+').replace(/_/g, '/');
-    
-    // Add padding if needed
-    let paddedKeyStr = safeKeyStr;
-    if (safeKeyStr.length % 4) {
-      paddedKeyStr = safeKeyStr.padEnd(safeKeyStr.length + (4 - safeKeyStr.length % 4), '=');
-    }
-    
-    // Base64 decode to get raw bytes
-    let decodedString;
-    try {
-      decodedString = atob(paddedKeyStr);
-    } catch (e) {
-      console.error("Base64 decoding error:", e);
-      throw new Error("Invalid key format - not a valid base64 string");
-    }
-    
-    const keyBuffer = str2ab(decodedString);
+    // Decode the URL-safe base64 key
+    const keyBuffer = base64UrlDecode(trimmedKeyStr);
+    console.log("Decoded key buffer length:", keyBuffer.byteLength);
     
     // Check that the key length is correct for AES-256 (32 bytes)
     if (keyBuffer.byteLength !== 32) {
       console.error(`Invalid key length: ${keyBuffer.byteLength} bytes (expected 32 bytes)`);
-      throw new Error("Invalid key length");
+      throw new Error(`Invalid key length: ${keyBuffer.byteLength} bytes`);
     }
     
     return window.crypto.subtle.importKey(
@@ -88,7 +98,11 @@ export const importKey = async (keyStr: string): Promise<CryptoKey> => {
     );
   } catch (error) {
     console.error("Error importing key:", error);
-    throw new Error("Invalid encryption key format");
+    if (error instanceof Error) {
+      throw new Error(`Invalid encryption key format: ${error.message}`);
+    } else {
+      throw new Error("Invalid encryption key format");
+    }
   }
 };
 
@@ -155,7 +169,7 @@ export const encryptMessage = async (message: string, key: CryptoKey): Promise<s
     combined.set(new Uint8Array(ciphertext), salt.length + iv.length);
     
     // Return as URL-safe base64 string
-    return btoa(ab2str(combined.buffer)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return base64UrlEncode(combined.buffer);
   } catch (error) {
     console.error("Encryption error:", error);
     throw new Error("Failed to encrypt message");
@@ -165,26 +179,15 @@ export const encryptMessage = async (message: string, key: CryptoKey): Promise<s
 // Decrypt a message with forward secrecy
 export const decryptMessage = async (encryptedMessage: string, key: CryptoKey): Promise<string> => {
   try {
-    // Handle URL-safe base64 encoding - make sure to trim any whitespace
+    console.log("Decrypting message, input length:", encryptedMessage.length);
+    
+    // Make sure to trim any whitespace
     const trimmedMessage = encryptedMessage.trim();
-    const safeMessage = trimmedMessage.replace(/-/g, '+').replace(/_/g, '/');
+    console.log("After trimming, length:", trimmedMessage.length);
     
-    // Add padding if needed
-    let paddedMessage = safeMessage;
-    if (safeMessage.length % 4) {
-      paddedMessage = safeMessage.padEnd(safeMessage.length + (4 - safeMessage.length % 4), '=');
-    }
-    
-    // Decode base64 with error handling
-    let decodedData;
-    try {
-      decodedData = atob(paddedMessage);
-    } catch (e) {
-      console.error("Base64 decoding error:", e);
-      throw new Error("Invalid message format - not a valid base64 string");
-    }
-    
-    const combined = str2ab(decodedData);
+    // Decode the base64 message
+    const combined = base64UrlDecode(trimmedMessage);
+    console.log("Decoded combined buffer length:", combined.byteLength);
     
     // Check minimum expected length (16 bytes salt + 12 bytes IV + at least some ciphertext)
     if (combined.byteLength < 28) {
@@ -224,7 +227,11 @@ export const decryptMessage = async (encryptedMessage: string, key: CryptoKey): 
     return new TextDecoder().decode(decrypted);
   } catch (error) {
     console.error("Decryption error:", error);
-    throw new Error("Failed to decrypt the message. The key may be incorrect or the message format is invalid.");
+    if (error instanceof Error) {
+      throw new Error(`Failed to decrypt the message: ${error.message}`);
+    } else {
+      throw new Error("Failed to decrypt the message");
+    }
   }
 };
 

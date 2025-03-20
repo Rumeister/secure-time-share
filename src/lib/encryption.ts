@@ -47,12 +47,35 @@ export const exportKey = async (key: CryptoKey): Promise<string> => {
 // Import a key from base64 string
 export const importKey = async (keyStr: string): Promise<CryptoKey> => {
   try {
-    // Handle URL-safe base64 encoding
-    const safeKeyStr = keyStr.replace(/-/g, '+').replace(/_/g, '/');
-    // Add padding if needed
-    const paddedKeyStr = safeKeyStr.padEnd(safeKeyStr.length + (4 - safeKeyStr.length % 4) % 4, '=');
+    // Make sure to trim any whitespace from the key
+    const trimmedKeyStr = keyStr.trim();
     
-    const keyBuffer = str2ab(atob(paddedKeyStr));
+    // Handle URL-safe base64 encoding
+    const safeKeyStr = trimmedKeyStr.replace(/-/g, '+').replace(/_/g, '/');
+    
+    // Add padding if needed
+    let paddedKeyStr = safeKeyStr;
+    if (safeKeyStr.length % 4) {
+      paddedKeyStr = safeKeyStr.padEnd(safeKeyStr.length + (4 - safeKeyStr.length % 4), '=');
+    }
+    
+    // Base64 decode to get raw bytes
+    let decodedString;
+    try {
+      decodedString = atob(paddedKeyStr);
+    } catch (e) {
+      console.error("Base64 decoding error:", e);
+      throw new Error("Invalid key format - not a valid base64 string");
+    }
+    
+    const keyBuffer = str2ab(decodedString);
+    
+    // Check that the key length is correct for AES-256 (32 bytes)
+    if (keyBuffer.byteLength !== 32) {
+      console.error(`Invalid key length: ${keyBuffer.byteLength} bytes (expected 32 bytes)`);
+      throw new Error("Invalid key length");
+    }
+    
     return window.crypto.subtle.importKey(
       "raw",
       keyBuffer,
@@ -104,50 +127,86 @@ const deriveKey = async (baseKey: CryptoKey, salt: Uint8Array): Promise<CryptoKe
 
 // Encrypt a message with forward secrecy concept
 export const encryptMessage = async (message: string, key: CryptoKey): Promise<string> => {
-  // Generate random salt and IV for this message
-  const salt = generateSalt();
-  const iv = generateIV();
-  
-  // Derive a unique message key (similar to Signal's message keys)
-  const messageKey = await deriveKey(key, salt);
-  
-  // Encode the message
-  const encoded = new TextEncoder().encode(message);
-  
-  // Encrypt with the derived key
-  const ciphertext = await window.crypto.subtle.encrypt(
-    {
-      name: "AES-GCM",
-      iv,
-    },
-    messageKey,
-    encoded
-  );
-  
-  // Combine salt, IV and ciphertext for storage
-  const combined = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
-  combined.set(salt);
-  combined.set(iv, salt.length);
-  combined.set(new Uint8Array(ciphertext), salt.length + iv.length);
-  
-  // Return as URL-safe base64 string
-  return btoa(ab2str(combined.buffer)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  try {
+    // Generate random salt and IV for this message
+    const salt = generateSalt();
+    const iv = generateIV();
+    
+    // Derive a unique message key (similar to Signal's message keys)
+    const messageKey = await deriveKey(key, salt);
+    
+    // Encode the message
+    const encoded = new TextEncoder().encode(message);
+    
+    // Encrypt with the derived key
+    const ciphertext = await window.crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv,
+      },
+      messageKey,
+      encoded
+    );
+    
+    // Combine salt, IV and ciphertext for storage
+    const combined = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
+    combined.set(salt);
+    combined.set(iv, salt.length);
+    combined.set(new Uint8Array(ciphertext), salt.length + iv.length);
+    
+    // Return as URL-safe base64 string
+    return btoa(ab2str(combined.buffer)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  } catch (error) {
+    console.error("Encryption error:", error);
+    throw new Error("Failed to encrypt message");
+  }
 };
 
 // Decrypt a message with forward secrecy
 export const decryptMessage = async (encryptedMessage: string, key: CryptoKey): Promise<string> => {
   try {
-    // Handle URL-safe base64 encoding
-    const safeMessage = encryptedMessage.replace(/-/g, '+').replace(/_/g, '/');
-    // Add padding if needed
-    const paddedMessage = safeMessage.padEnd(safeMessage.length + (4 - safeMessage.length % 4) % 4, '=');
+    // Handle URL-safe base64 encoding - make sure to trim any whitespace
+    const trimmedMessage = encryptedMessage.trim();
+    const safeMessage = trimmedMessage.replace(/-/g, '+').replace(/_/g, '/');
     
-    const combined = str2ab(atob(paddedMessage));
+    // Add padding if needed
+    let paddedMessage = safeMessage;
+    if (safeMessage.length % 4) {
+      paddedMessage = safeMessage.padEnd(safeMessage.length + (4 - safeMessage.length % 4), '=');
+    }
+    
+    // Decode base64 with error handling
+    let decodedData;
+    try {
+      decodedData = atob(paddedMessage);
+    } catch (e) {
+      console.error("Base64 decoding error:", e);
+      throw new Error("Invalid message format - not a valid base64 string");
+    }
+    
+    const combined = str2ab(decodedData);
+    
+    // Check minimum expected length (16 bytes salt + 12 bytes IV + at least some ciphertext)
+    if (combined.byteLength < 28) {
+      console.error(`Invalid message length: ${combined.byteLength} bytes (expected at least 28 bytes)`);
+      throw new Error("Invalid message format - message is too short");
+    }
     
     // Extract salt, IV and ciphertext
     const salt = new Uint8Array(combined.slice(0, 16));
     const iv = new Uint8Array(combined.slice(16, 28));
     const ciphertext = new Uint8Array(combined.slice(28));
+    
+    // Validate components
+    if (salt.length !== 16) {
+      console.error(`Invalid salt length: ${salt.length}`);
+      throw new Error("Invalid message format - incorrect salt length");
+    }
+    
+    if (iv.length !== 12) {
+      console.error(`Invalid IV length: ${iv.length}`);
+      throw new Error("Invalid message format - incorrect IV length");
+    }
     
     // Derive the same message key using the provided salt
     const messageKey = await deriveKey(key, salt);

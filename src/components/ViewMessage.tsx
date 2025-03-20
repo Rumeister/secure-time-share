@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { LockKeyhole, ShieldAlert, Clock, Eye, Copy, Check } from "lucide-react";
@@ -54,6 +55,9 @@ const ViewMessage = () => {
         // Clean the key fragment - remove any leading/trailing whitespace
         keyFragment = keyFragment.trim();
         
+        console.log("Processing message with ID:", id);
+        console.log("Key fragment length:", keyFragment.length);
+        
         try {
           // Import the key with error handling
           const key = await importKey(keyFragment);
@@ -84,9 +88,10 @@ const ViewMessage = () => {
           return;
         }
         
-        // Clear URL fragment for security
-        if (history.replaceState) {
-          history.replaceState(null, "", window.location.pathname + window.location.search);
+        // Clear URL fragment for security but preserve the path and query
+        if (window.history.replaceState) {
+          const { pathname, search } = window.location;
+          window.history.replaceState(null, "", pathname + search);
         }
       } catch (error) {
         console.error("Error viewing message:", error);
@@ -101,11 +106,16 @@ const ViewMessage = () => {
   
   const handleCopyMessage = async () => {
     if (decryptedMessage) {
-      await navigator.clipboard.writeText(decryptedMessage);
-      setCopied(true);
-      toast.success("Message copied to clipboard!");
-      
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        await navigator.clipboard.writeText(decryptedMessage);
+        setCopied(true);
+        toast.success("Message copied to clipboard!");
+        
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error("Failed to copy:", err);
+        toast.error("Unable to copy to clipboard. Please select and copy manually.");
+      }
     }
   };
   

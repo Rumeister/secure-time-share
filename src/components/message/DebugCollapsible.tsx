@@ -20,6 +20,10 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
     return "ghost";
   };
   
+  // Count the number of errors and warnings
+  const errorCount = debugInfo.filter(log => log.toLowerCase().includes("error")).length;
+  const warningCount = debugInfo.filter(log => log.toLowerCase().includes("warning")).length;
+  
   return (
     <Collapsible>
       <div className="flex justify-center mb-4">
@@ -32,7 +36,8 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
           >
             <Bug className="mr-1 h-3.5 w-3.5" />
             {showDebug ? "Hide Debug Info" : `Show Debug Info${
-              hasErrors ? " (Has Errors)" : hasWarnings ? " (Has Warnings)" : ""
+              hasErrors ? ` (${errorCount} Error${errorCount !== 1 ? 's' : ''})` : 
+              hasWarnings ? ` (${warningCount} Warning${warningCount !== 1 ? 's' : ''})` : ""
             }`}
           </Button>
         </CollapsibleTrigger>
@@ -44,7 +49,7 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
             <div 
               key={i} 
               className={
-                log.toLowerCase().includes("error") ? "text-red-500" : 
+                log.toLowerCase().includes("error") ? "text-red-500 font-bold" : 
                 log.toLowerCase().includes("warning") ? "text-amber-500" : 
                 log.toLowerCase().includes("success") ? "text-green-600" : ""
               }

@@ -15,12 +15,23 @@ export interface MessageData {
 const getAllMessages = (): MessageData[] => {
   try {
     const messagesString = localStorage.getItem('secureMessages');
-    if (!messagesString) return [];
+    if (!messagesString) {
+      console.log("No 'secureMessages' found in localStorage");
+      return [];
+    }
     
     const messages = JSON.parse(messagesString);
-    return Array.isArray(messages) ? messages : [];
+    if (!Array.isArray(messages)) {
+      console.warn("'secureMessages' is not an array, resetting to empty array");
+      localStorage.setItem('secureMessages', '[]');
+      return [];
+    }
+    
+    return messages;
   } catch (error) {
     console.error('Error getting messages:', error);
+    // Reset the storage if there's corruption
+    localStorage.setItem('secureMessages', '[]');
     return [];
   }
 };
@@ -29,21 +40,32 @@ const getAllMessages = (): MessageData[] => {
  * Saves a message to localStorage
  */
 export const saveMessage = (message: MessageData) => {
-  // Add owner ID if user is signed in
-  const userId = getUserId();
-  if (userId) {
-    message.ownerId = userId;
-  }
-  
-  const messages = getAllMessages();
-  messages.push(message);
-  localStorage.setItem('secureMessages', JSON.stringify(messages));
-  
-  // If user is signed in, also save to user's messages
-  if (userId) {
-    const userMessages = getUserMessages();
-    userMessages.push(message);
-    localStorage.setItem(`userMessages_${userId}`, JSON.stringify(userMessages));
+  try {
+    // Add owner ID if user is signed in
+    const userId = getUserId();
+    if (userId) {
+      message.ownerId = userId;
+    }
+    
+    const messages = getAllMessages();
+    messages.push(message);
+    
+    // Store the updated messages
+    const messagesJson = JSON.stringify(messages);
+    localStorage.setItem('secureMessages', messagesJson);
+    console.log(`Message ${message.id} saved successfully, storage size: ${messagesJson.length} chars`);
+    
+    // If user is signed in, also save to user's messages
+    if (userId) {
+      const userMessages = getUserMessages();
+      userMessages.push(message);
+      localStorage.setItem(`userMessages_${userId}`, JSON.stringify(userMessages));
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error saving message:', error);
+    return false;
   }
 };
 
@@ -86,8 +108,38 @@ export const getUserMessages = (): MessageData[] => {
  * Retrieves a message by ID from localStorage
  */
 export const getMessage = (id: string): MessageData | undefined => {
-  const messages = getAllMessages();
-  return messages.find(message => message.id === id);
+  try {
+    if (!id) {
+      console.error("getMessage: No ID provided");
+      return undefined;
+    }
+    
+    const messages = getAllMessages();
+    const message = messages.find(message => message.id === id);
+    
+    if (message) {
+      console.log(`Message ${id} found in storage`);
+      return message;
+    }
+    
+    console.warn(`Message ${id} not found in storage`);
+    
+    // Check user-specific storage as well
+    const userId = getUserId();
+    if (userId) {
+      const userMessages = getUserMessages();
+      const userMessage = userMessages.find(message => message.id === id);
+      if (userMessage) {
+        console.log(`Message ${id} found in user-specific storage`);
+        return userMessage;
+      }
+    }
+    
+    return undefined;
+  } catch (error) {
+    console.error(`Error retrieving message ${id}:`, error);
+    return undefined;
+  }
 };
 
 /**
@@ -194,17 +246,24 @@ export const isMessageExpired = (message: MessageData): boolean => {
  * Cleans up expired messages from localStorage
  */
 export const cleanupExpiredMessages = () => {
-  const messages = getAllMessages();
-  const validMessages = messages.filter(message => !isMessageExpired(message));
-  
-  // Delete expired messages
-  messages.forEach(message => {
-    if (isMessageExpired(message)) {
-      deleteMessage(message.id);
-    }
-  });
+  try {
+    const messages = getAllMessages();
+    const validMessages = messages.filter(message => !isMessageExpired(message));
+    
+    console.log(`Cleaning up expired messages: ${messages.length - validMessages.length} expired out of ${messages.length} total`);
+    
+    // Delete expired messages
+    messages.forEach(message => {
+      if (isMessageExpired(message)) {
+        console.log(`Deleting expired message ${message.id}`);
+        deleteMessage(message.id);
+      }
+    });
 
-  localStorage.setItem('secureMessages', JSON.stringify(validMessages));
+    localStorage.setItem('secureMessages', JSON.stringify(validMessages));
+  } catch (error) {
+    console.error('Error cleaning up expired messages:', error);
+  }
 };
 
 /**
@@ -213,11 +272,23 @@ export const cleanupExpiredMessages = () => {
  */
 export const storeEncryptionKey = (messageId: string, encodedKey: string) => {
   try {
+    if (!messageId || !encodedKey) {
+      console.error("Cannot store key: missing messageId or key");
+      return false;
+    }
+    
     // Trim the key to avoid whitespace issues during cross-browser decryption
     const trimmedKey = encodedKey.trim();
     
     const keysStore = localStorage.getItem('secureMessageKeys') || '{}';
-    const keys = JSON.parse(keysStore);
+    let keys = {};
+    
+    try {
+      keys = JSON.parse(keysStore);
+    } catch (e) {
+      console.error("Error parsing keys store, resetting:", e);
+      keys = {};
+    }
     
     keys[messageId] = trimmedKey;
     localStorage.setItem('secureMessageKeys', JSON.stringify(keys));
@@ -235,12 +306,26 @@ export const storeEncryptionKey = (messageId: string, encodedKey: string) => {
  */
 export const getEncryptionKey = (messageId: string): string | null => {
   try {
+    if (!messageId) {
+      console.error("Cannot retrieve key: missing messageId");
+      return null;
+    }
+    
     const keysStore = localStorage.getItem('secureMessageKeys') || '{}';
-    const keys = JSON.parse(keysStore);
+    let keys = {};
+    
+    try {
+      keys = JSON.parse(keysStore);
+    } catch (e) {
+      console.error("Error parsing keys store:", e);
+      return null;
+    }
     
     const key = keys[messageId] || null;
     if (key) {
       console.log(`Retrieved key for message ID: ${messageId}, key length: ${key.length}`);
+    } else {
+      console.warn(`No key found for message ID: ${messageId}`);
     }
     return key;
   } catch (error) {
@@ -248,3 +333,4 @@ export const getEncryptionKey = (messageId: string): string | null => {
     return null;
   }
 };
+

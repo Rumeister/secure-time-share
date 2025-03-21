@@ -32,7 +32,7 @@ export const generateKey = async (): Promise<CryptoKey> => {
       name: "AES-GCM",
       length: 256, // Use 256-bit keys for stronger encryption
     },
-    true,
+    true, // Make sure keys are extractable
     ["encrypt", "decrypt"]
   );
 };
@@ -62,9 +62,18 @@ const base64UrlDecode = (base64Url: string): ArrayBuffer => {
 
 // Export the key to base64 string for sharing
 export const exportKey = async (key: CryptoKey): Promise<string> => {
-  const exported = await window.crypto.subtle.exportKey("raw", key);
-  // Use URL-safe base64 encoding
-  return base64UrlEncode(exported);
+  try {
+    const exported = await window.crypto.subtle.exportKey("raw", key);
+    // Use URL-safe base64 encoding
+    return base64UrlEncode(exported);
+  } catch (error) {
+    console.error("Error exporting key:", error);
+    if (error instanceof Error) {
+      throw new Error(`Failed to export key: ${error.message}`);
+    } else {
+      throw new Error("Failed to export key");
+    }
+  }
 };
 
 // Import a key from base64 string
@@ -93,7 +102,7 @@ export const importKey = async (keyStr: string): Promise<CryptoKey> => {
         name: "AES-GCM",
         length: 256,
       },
-      false,
+      true, // Make sure imported keys are extractable
       ["encrypt", "decrypt"]
     );
   } catch (error) {
@@ -113,30 +122,39 @@ const generateSalt = (): Uint8Array => {
 
 // Derive a key using PBKDF2 (inspired by Signal's key derivation)
 const deriveKey = async (baseKey: CryptoKey, salt: Uint8Array): Promise<CryptoKey> => {
-  const keyMaterial = await window.crypto.subtle.exportKey("raw", baseKey);
-  
-  // Import as key material for derivation
-  const importedKeyMaterial = await window.crypto.subtle.importKey(
-    "raw",
-    keyMaterial,
-    { name: "PBKDF2" },
-    false,
-    ["deriveBits", "deriveKey"]
-  );
-  
-  // Derive a new key using PBKDF2
-  return window.crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: salt,
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    importedKeyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
+  try {
+    const keyMaterial = await window.crypto.subtle.exportKey("raw", baseKey);
+    
+    // Import as key material for derivation
+    const importedKeyMaterial = await window.crypto.subtle.importKey(
+      "raw",
+      keyMaterial,
+      { name: "PBKDF2" },
+      false,
+      ["deriveBits", "deriveKey"]
+    );
+    
+    // Derive a new key using PBKDF2
+    return window.crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: salt,
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      importedKeyMaterial,
+      { name: "AES-GCM", length: 256 },
+      true, // Make derived keys extractable
+      ["encrypt", "decrypt"]
+    );
+  } catch (error) {
+    console.error("Key derivation error:", error);
+    if (error instanceof Error) {
+      throw new Error(`Key derivation failed: ${error.message}`);
+    } else {
+      throw new Error("Key derivation failed");
+    }
+  }
 };
 
 // Encrypt a message with forward secrecy concept
@@ -172,7 +190,11 @@ export const encryptMessage = async (message: string, key: CryptoKey): Promise<s
     return base64UrlEncode(combined.buffer);
   } catch (error) {
     console.error("Encryption error:", error);
-    throw new Error("Failed to encrypt message");
+    if (error instanceof Error) {
+      throw new Error(`Failed to encrypt message: ${error.message}`);
+    } else {
+      throw new Error("Failed to encrypt message");
+    }
   }
 };
 
@@ -243,3 +265,4 @@ export const generateToken = (): string => {
     .map(b => b.toString(16).padStart(2, "0"))
     .join("");
 };
+

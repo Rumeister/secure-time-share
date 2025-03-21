@@ -10,20 +10,21 @@ interface DebugCollapsibleProps {
 
 const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
   const [showDebug, setShowDebug] = useState(false);
+  const hasErrors = debugInfo.some(log => log.toLowerCase().includes("error"));
   
   return (
     <Collapsible>
       <div className="flex justify-center mb-4">
         <CollapsibleTrigger asChild>
           <Button 
-            variant={debugInfo.some(log => log.toLowerCase().includes("error")) ? "destructive" : "ghost"}
+            variant={hasErrors ? "destructive" : "ghost"}
             size="sm" 
             onClick={() => setShowDebug(!showDebug)} 
             className="text-xs flex items-center"
           >
             <Bug className="mr-1 h-3.5 w-3.5" />
             {showDebug ? "Hide Debug Info" : `Show Debug Info${
-              debugInfo.some(log => log.toLowerCase().includes("error")) ? " (Has Errors)" : ""
+              hasErrors ? " (Has Errors)" : ""
             }`}
           </Button>
         </CollapsibleTrigger>

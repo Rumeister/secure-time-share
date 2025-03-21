@@ -6,6 +6,8 @@ export interface MessageData {
   maxViews: number | null;
   currentViews: number;
   createdAt: number;
+  sharedWithUsers?: string[]; // Array of user IDs the message is shared with
+  ownerId?: string; // ID of the user who created the message
 }
 
 /**
@@ -28,12 +30,17 @@ const getAllMessages = (): MessageData[] => {
  * Saves a message to localStorage
  */
 export const saveMessage = (message: MessageData) => {
+  // Add owner ID if user is signed in
+  const userId = getUserId();
+  if (userId) {
+    message.ownerId = userId;
+  }
+  
   const messages = getAllMessages();
   messages.push(message);
   localStorage.setItem('secureMessages', JSON.stringify(messages));
   
   // If user is signed in, also save to user's messages
-  const userId = getUserId();
   if (userId) {
     const userMessages = getUserMessages();
     userMessages.push(message);
@@ -123,6 +130,39 @@ export const deleteMessage = (id: string) => {
 };
 
 /**
+ * Share a message with a specific user
+ */
+export const shareMessageWithUser = (messageId: string, userId: string) => {
+  const message = getMessage(messageId);
+  if (!message) return false;
+  
+  // Add user to shared list if not already there
+  if (!message.sharedWithUsers) {
+    message.sharedWithUsers = [];
+  }
+  
+  if (!message.sharedWithUsers.includes(userId)) {
+    message.sharedWithUsers.push(userId);
+    updateMessage(message);
+  }
+  
+  return true;
+};
+
+/**
+ * Get messages shared with the current user
+ */
+export const getSharedMessages = (): MessageData[] => {
+  const userId = getUserId();
+  if (!userId) return [];
+  
+  const allMessages = getAllMessages();
+  return allMessages.filter(
+    message => message.sharedWithUsers?.includes(userId) && message.ownerId !== userId
+  );
+};
+
+/**
  * Increments the view count of a message and returns the updated message
  */
 export const incrementMessageViews = (id: string): MessageData | undefined => {
@@ -166,4 +206,37 @@ export const cleanupExpiredMessages = () => {
   });
 
   localStorage.setItem('secureMessages', JSON.stringify(validMessages));
+};
+
+/**
+ * Store encryption key separately to support cross-device access
+ * In a production app, this would likely use a more secure storage method
+ */
+export const storeEncryptionKey = (messageId: string, encodedKey: string) => {
+  try {
+    const keysStore = localStorage.getItem('secureMessageKeys') || '{}';
+    const keys = JSON.parse(keysStore);
+    
+    keys[messageId] = encodedKey;
+    localStorage.setItem('secureMessageKeys', JSON.stringify(keys));
+    return true;
+  } catch (error) {
+    console.error('Error storing encryption key:', error);
+    return false;
+  }
+};
+
+/**
+ * Retrieve an encryption key for a message
+ */
+export const getEncryptionKey = (messageId: string): string | null => {
+  try {
+    const keysStore = localStorage.getItem('secureMessageKeys') || '{}';
+    const keys = JSON.parse(keysStore);
+    
+    return keys[messageId] || null;
+  } catch (error) {
+    console.error('Error retrieving encryption key:', error);
+    return null;
+  }
 };

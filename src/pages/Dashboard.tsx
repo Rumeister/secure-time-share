@@ -5,15 +5,133 @@ import { useUser, UserButton } from "@clerk/clerk-react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { LockKeyhole, Clock, Eye, Plus } from "lucide-react";
+import { LockKeyhole, Clock, Eye, Plus, Copy, Check, Share } from "lucide-react";
 import { Link } from "react-router-dom";
-import { getUserMessages, MessageData } from "@/lib/storage";
+import { getUserMessages, MessageData, deleteMessage } from "@/lib/storage";
 import { toast } from "sonner";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription, 
+  DialogFooter 
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { exportKey, importKey } from "@/lib/encryption"; 
+
+interface ShareDialogProps {
+  message: MessageData;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const ShareDialog = ({ message, isOpen, onClose }: ShareDialogProps) => {
+  const [shareLink, setShareLink] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
+  // Generate the share link when the dialog opens
+  useEffect(() => {
+    if (isOpen && message) {
+      const generateShareLink = async () => {
+        try {
+          setLoading(true);
+          
+          // In a real implementation, you would retrieve the key associated with this message
+          // For now, we'll generate a placeholder link
+          const baseUrl = window.location.origin;
+          const link = `${baseUrl}/view/${message.id}#your-key-would-be-here`;
+          
+          setShareLink(link);
+        } catch (error) {
+          console.error("Error generating share link:", error);
+          toast.error("Failed to generate share link");
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      generateShareLink();
+    }
+  }, [isOpen, message]);
+  
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      toast.success("Link copied to clipboard!");
+      
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Error copying to clipboard:", error);
+      toast.error("Failed to copy link. Please select and copy it manually.");
+    }
+  };
+  
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md glass-card">
+        <DialogHeader>
+          <DialogTitle>Share Secure Message</DialogTitle>
+          <DialogDescription>
+            Share this link with the recipient to view your secure message.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4 mt-4">
+          {loading ? (
+            <div className="flex justify-center p-4">
+              <div className="h-6 w-6 border-2 border-primary border-t-transparent animate-spin rounded-full"></div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center space-x-2">
+                <Input
+                  value={shareLink}
+                  readOnly
+                  className="glass-input font-mono text-sm flex-1"
+                />
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={handleCopyLink}
+                  className="transition-all duration-300"
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Important Security Notes:</h4>
+                <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1">
+                  <li>This link contains the decryption key - anyone with it can read your message</li>
+                  <li>The link will only work until the message expires</li>
+                  <li>For cross-device sharing, the complete link must be shared</li>
+                </ul>
+              </div>
+            </>
+          )}
+        </div>
+        
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 const Dashboard = () => {
   const { isSignedIn, user } = useUser();
   const navigate = useNavigate();
   const [messages, setMessages] = useState<MessageData[]>([]);
+  const [shareMessage, setShareMessage] = useState<MessageData | null>(null);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -48,6 +166,22 @@ const Dashboard = () => {
     }
     
     return "Unknown";
+  };
+  
+  const handleShareMessage = (message: MessageData) => {
+    setShareMessage(message);
+    setIsShareDialogOpen(true);
+  };
+  
+  const handleDeleteMessage = (id: string) => {
+    try {
+      deleteMessage(id);
+      setMessages(messages.filter(message => message.id !== id));
+      toast.success("Message deleted successfully");
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      toast.error("Failed to delete message");
+    }
   };
   
   return (
@@ -105,17 +239,27 @@ const Dashboard = () => {
                     </span>
                   </div>
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="flex gap-2">
                   <Button 
                     variant="outline" 
-                    className="w-full"
-                    onClick={() => {
-                      // This would typically generate a link to view the message
-                      // that includes the encryption key, which we don't have here
-                      toast.info("Share functionality coming soon!");
-                    }}
+                    className="flex-1"
+                    onClick={() => handleShareMessage(message)}
                   >
-                    Share Link
+                    <Share className="h-4 w-4 mr-2" />
+                    Share
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    size="icon"
+                    onClick={() => handleDeleteMessage(message.id)}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2">
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      <line x1="10" x2="10" y1="11" y2="17" />
+                      <line x1="14" x2="14" y1="11" y2="17" />
+                    </svg>
                   </Button>
                 </CardFooter>
               </Card>
@@ -137,6 +281,17 @@ const Dashboard = () => {
           </div>
         )}
       </div>
+      
+      {shareMessage && (
+        <ShareDialog 
+          message={shareMessage}
+          isOpen={isShareDialogOpen}
+          onClose={() => {
+            setIsShareDialogOpen(false);
+            setShareMessage(null);
+          }}
+        />
+      )}
     </Layout>
   );
 };

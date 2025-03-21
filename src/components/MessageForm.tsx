@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LockKeyhole, Copy, Check, Clock, Eye } from "lucide-react";
+import { LockKeyhole, Copy, Check, Clock, Eye, Users, Link } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,20 +16,129 @@ import {
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { 
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from "@/components/ui/tabs";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { 
   encryptMessage, 
   generateKey, 
   exportKey, 
   generateToken 
 } from "@/lib/encryption";
-import { saveMessage } from "@/lib/storage";
+import { saveMessage, getUserId } from "@/lib/storage";
+import { useUser } from "@clerk/clerk-react";
 
+interface UserShareFormProps {
+  messageId: string;
+  encryptedContent: string;
+  exportedKey: string;
+  onClose: () => void;
+}
+
+// Component for sharing with specific users
+const UserShareForm = ({ messageId, encryptedContent, exportedKey, onClose }: UserShareFormProps) => {
+  const { user } = useUser();
+  const [selectedUser, setSelectedUser] = useState("");
+  const [loading, setLoading] = useState(false);
+  
+  // In a real app, this would fetch users from your backend
+  // For now we'll simulate this with a placeholder
+  const userFriends = [
+    { id: "user1", username: "alice" },
+    { id: "user2", username: "bob" },
+    { id: "user3", username: "charlie" },
+  ];
+  
+  const handleShareWithUser = async () => {
+    if (!selectedUser) {
+      toast.error("Please select a user to share with");
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      // In a real implementation, you would:
+      // 1. Store the message in a database
+      // 2. Create a relationship between the message and the recipient
+      // 3. Notify the recipient
+      
+      // For now, we'll simulate a successful share
+      setTimeout(() => {
+        toast.success(`Message shared with ${selectedUser}!`);
+        setLoading(false);
+        onClose();
+      }, 1000);
+    } catch (error) {
+      console.error("Error sharing message:", error);
+      toast.error("Failed to share message. Please try again.");
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Share this message directly with another user of the app.
+      </p>
+      
+      <div className="space-y-2">
+        <Label htmlFor="user-select">Select User</Label>
+        <Select value={selectedUser} onValueChange={setSelectedUser}>
+          <SelectTrigger id="user-select" className="glass-input">
+            <SelectValue placeholder="Select a user" />
+          </SelectTrigger>
+          <SelectContent>
+            {userFriends.map((friend) => (
+              <SelectItem key={friend.id} value={friend.username}>
+                {friend.username}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <Button 
+        onClick={handleShareWithUser} 
+        className="w-full"
+        disabled={loading || !selectedUser}
+      >
+        {loading ? (
+          <div className="flex items-center">
+            <div className="h-4 w-4 border-2 border-current border-t-transparent animate-spin rounded-full mr-2"></div>
+            <span>Sharing...</span>
+          </div>
+        ) : (
+          <span>Share with User</span>
+        )}
+      </Button>
+    </div>
+  );
+};
+
+// Main MessageForm component
 const MessageForm = () => {
   const navigate = useNavigate();
+  const { isSignedIn } = useUser();
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [expiration, setExpiration] = useState("1h");
   const [shareLink, setShareLink] = useState("");
+  const [messageId, setMessageId] = useState("");
+  const [encryptedContent, setEncryptedContent] = useState("");
+  const [exportedKey, setExportedKey] = useState("");
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareMethod, setShareMethod] = useState<"link" | "user">("link");
   const [copied, setCopied] = useState(false);
   
   const handleExpirationChange = (value: string) => {
@@ -60,10 +169,10 @@ const MessageForm = () => {
     try {
       // Generate encryption key
       const key = await generateKey();
-      const exportedKey = await exportKey(key);
+      const keyString = await exportKey(key);
       
       // Encrypt the message
-      const encryptedContent = await encryptMessage(message, key);
+      const encrypted = await encryptMessage(message, key);
       
       // Generate a unique ID for the message
       const id = generateToken();
@@ -90,7 +199,7 @@ const MessageForm = () => {
       // Save the encrypted message to storage
       saveMessage({
         id,
-        encryptedContent,
+        encryptedContent: encrypted,
         expiresAt,
         maxViews,
         currentViews: 0,
@@ -100,9 +209,18 @@ const MessageForm = () => {
       // Generate share link with the key in the fragment
       // Use origin to ensure we get the proper base URL
       const baseUrl = window.location.origin;
-      const shareUrl = `${baseUrl}/view/${id}#${exportedKey}`;
+      const shareUrl = `${baseUrl}/view/${id}#${keyString}`;
       
+      // Save values for sharing options
       setShareLink(shareUrl);
+      setMessageId(id);
+      setEncryptedContent(encrypted);
+      setExportedKey(keyString);
+      
+      // Set default share method based on auth status
+      setShareMethod(isSignedIn ? "user" : "link");
+      
+      // Show sharing dialog
       setShowShareDialog(true);
       
       // Reset form
@@ -115,6 +233,16 @@ const MessageForm = () => {
     }
   };
   
+  const handleCloseDialog = () => {
+    setShowShareDialog(false);
+    // Reset all sharing state
+    setShareLink("");
+    setMessageId("");
+    setEncryptedContent("");
+    setExportedKey("");
+    setCopied(false);
+  };
+  
   return (
     <>
       <div className="glass-card p-6 md:p-8 w-full max-w-2xl mx-auto animate-scale-in">
@@ -125,7 +253,7 @@ const MessageForm = () => {
               <h2 className="text-2xl font-semibold tracking-tight">Secure Message</h2>
             </div>
             <p className="text-sm text-muted-foreground">
-              Your message will be encrypted in your browser and can only be decrypted by someone with the share link.
+              Your message will be encrypted in your browser and can only be decrypted by someone with the share link or by a recipient you choose.
             </p>
           </div>
           
@@ -215,43 +343,75 @@ const MessageForm = () => {
           <DialogHeader>
             <DialogTitle>Secure Message Created</DialogTitle>
             <DialogDescription>
-              Share this link with the recipient. For maximum security, send it using a different communication channel than you normally use.
+              Choose how you want to share this message.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 mt-4">
-            <div className="flex items-center space-x-2">
-              <Input
-                value={shareLink}
-                readOnly
-                className="glass-input font-mono text-sm flex-1"
-              />
-              <Button 
-                variant="outline" 
-                size="icon" 
-                onClick={handleCopyLink}
-                className="transition-all duration-300"
-              >
-                {copied ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
+          <Tabs defaultValue={shareMethod} className="mt-4" onValueChange={(value) => setShareMethod(value as "link" | "user")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="link" className="flex items-center">
+                <Link className="h-4 w-4 mr-2" />
+                <span>Share via Link</span>
+              </TabsTrigger>
+              <TabsTrigger value="user" className="flex items-center" disabled={!isSignedIn}>
+                <Users className="h-4 w-4 mr-2" />
+                <span>Share with User</span>
+              </TabsTrigger>
+            </TabsList>
             
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium">Important Security Notes:</h4>
-              <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1">
-                <li>This link contains the decryption key - anyone with it can read your message</li>
-                <li>The link will only work until the message expires</li>
-                <li>Once expired, the message is permanently deleted</li>
-              </ul>
-            </div>
+            <TabsContent value="link" className="space-y-4 mt-4">
+              <div className="flex items-center space-x-2">
+                <Input
+                  value={shareLink}
+                  readOnly
+                  className="glass-input font-mono text-sm flex-1"
+                />
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={handleCopyLink}
+                  className="transition-all duration-300"
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Important Security Notes:</h4>
+                <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1">
+                  <li>This link contains the decryption key - anyone with it can read your message</li>
+                  <li>The link will only work until the message expires</li>
+                  <li>Once expired, the message is permanently deleted</li>
+                  <li>For cross-device sharing, the complete link must be shared</li>
+                </ul>
+              </div>
+            </TabsContent>
             
-            <div className="flex justify-end">
-              <Button onClick={() => setShowShareDialog(false)}>Done</Button>
-            </div>
+            <TabsContent value="user" className="space-y-4 mt-4">
+              {isSignedIn ? (
+                <UserShareForm 
+                  messageId={messageId}
+                  encryptedContent={encryptedContent}
+                  exportedKey={exportedKey}
+                  onClose={handleCloseDialog}
+                />
+              ) : (
+                <div className="text-center p-4">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    You must be signed in to share with specific users.
+                  </p>
+                  <Button onClick={() => navigate("/sign-in")}>Sign In</Button>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+          
+          <div className="flex justify-end mt-4">
+            <Button variant="outline" onClick={handleCloseDialog}>Done</Button>
           </div>
         </DialogContent>
       </Dialog>

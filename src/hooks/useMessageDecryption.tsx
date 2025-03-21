@@ -1,7 +1,8 @@
 
 import { useState, useEffect } from "react";
+import { useUser } from "@clerk/clerk-react";
 import { decryptMessage, importKey } from "@/lib/encryption";
-import { getMessage, incrementMessageViews, isMessageExpired, deleteMessage } from "@/lib/storage";
+import { getMessage, incrementMessageViews, isMessageExpired, deleteMessage, getEncryptionKey } from "@/lib/storage";
 
 interface UseMessageDecryptionResult {
   decryptedMessage: string | null;
@@ -12,6 +13,7 @@ interface UseMessageDecryptionResult {
 }
 
 export const useMessageDecryption = (id: string | undefined): UseMessageDecryptionResult => {
+  const { isSignedIn, user } = useUser();
   const [decryptedMessage, setDecryptedMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,12 +57,33 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
           return;
         }
         
-        // Check for URL fragment (key)
+        // Try multiple ways to get the decryption key
         let keyFragment = window.location.hash.substring(1);
         
+        // If no key in URL, check if the user is the owner or a shared recipient
+        if (!keyFragment && isSignedIn) {
+          // 1. Check if user created this message and has saved the key
+          const storedKey = getEncryptionKey(id);
+          if (storedKey) {
+            addDebugInfo("Found stored encryption key for this message");
+            keyFragment = storedKey;
+          } 
+          // 2. Check if this message was shared with the current user
+          else if (message.sharedWithUsers?.includes(user?.id || "") || message.ownerId === user?.id) {
+            addDebugInfo("Message was shared with the current user, retrieving key...");
+            // In a real app, you would fetch the key from a secure server
+            // For now, we'll just log that this would work
+            const storedSharedKey = getEncryptionKey(id);
+            if (storedSharedKey) {
+              keyFragment = storedSharedKey;
+              addDebugInfo("Retrieved shared encryption key");
+            }
+          }
+        }
+        
         if (!keyFragment) {
-          setError("Missing decryption key. The URL may be incomplete.");
-          addDebugInfo("No key fragment found in URL hash");
+          setError("Missing decryption key. The URL may be incomplete or you don't have access to this message.");
+          addDebugInfo("No key fragment found in URL hash or stored keys");
           setLoading(false);
           return;
         }
@@ -131,7 +154,7 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
     };
     
     decryptAndViewMessage();
-  }, [id]);
+  }, [id, isSignedIn, user?.id]);
   
   return { decryptedMessage, loading, error, expiryInfo, debugInfo };
 };

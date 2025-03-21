@@ -26,34 +26,50 @@ const generateIV = (): Uint8Array => {
 
 // Generate a random encryption key with enhanced security
 export const generateKey = async (): Promise<CryptoKey> => {
-  // Use AES-GCM with 256-bit keys for strong encryption
-  return window.crypto.subtle.generateKey(
-    {
-      name: "AES-GCM",
-      length: 256, // Use 256-bit keys for stronger encryption
-    },
-    true, // Make sure keys are extractable
-    ["encrypt", "decrypt"]
-  );
+  try {
+    // Use AES-GCM with 256-bit keys for strong encryption
+    return window.crypto.subtle.generateKey(
+      {
+        name: "AES-GCM",
+        length: 256, // Use 256-bit keys for stronger encryption
+      },
+      true, // Make sure keys are extractable
+      ["encrypt", "decrypt"]
+    );
+  } catch (error) {
+    console.error("Error generating key:", error);
+    throw new Error("Failed to generate encryption key. Your browser may not support the required cryptography features.");
+  }
 };
 
 // Properly base64 encode with URL safety
 const base64UrlEncode = (arrayBuffer: ArrayBuffer): string => {
-  const base64 = btoa(ab2str(arrayBuffer));
+  // Use TextEncoder/Decoder for better browser compatibility
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
   // Make base64 URL-safe
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
 
 // Properly decode URL-safe base64
 const base64UrlDecode = (base64Url: string): ArrayBuffer => {
-  // Add padding if needed
-  let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-  while (base64.length % 4) {
-    base64 += '=';
-  }
-  
   try {
-    return str2ab(atob(base64));
+    // Add padding if needed
+    let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4) {
+      base64 += '=';
+    }
+    
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
   } catch (error) {
     console.error("Base64 decoding error:", error);
     throw new Error("Invalid base64 format");
@@ -63,6 +79,11 @@ const base64UrlDecode = (base64Url: string): ArrayBuffer => {
 // Export the key to base64 string for sharing
 export const exportKey = async (key: CryptoKey): Promise<string> => {
   try {
+    // Ensure the key is extractable
+    if (!key.extractable) {
+      throw new Error("The key is not extractable");
+    }
+    
     const exported = await window.crypto.subtle.exportKey("raw", key);
     // Use URL-safe base64 encoding
     return base64UrlEncode(exported);
@@ -95,6 +116,7 @@ export const importKey = async (keyStr: string): Promise<CryptoKey> => {
       throw new Error(`Invalid key length: ${keyBuffer.byteLength} bytes`);
     }
     
+    // Import with explicit extractable:true
     return window.crypto.subtle.importKey(
       "raw",
       keyBuffer,
@@ -102,7 +124,7 @@ export const importKey = async (keyStr: string): Promise<CryptoKey> => {
         name: "AES-GCM",
         length: 256,
       },
-      true, // Make sure imported keys are extractable
+      true, // CRITICAL: Explicitly set extractable to true
       ["encrypt", "decrypt"]
     );
   } catch (error) {
@@ -123,6 +145,11 @@ const generateSalt = (): Uint8Array => {
 // Derive a key using PBKDF2 (inspired by Signal's key derivation)
 const deriveKey = async (baseKey: CryptoKey, salt: Uint8Array): Promise<CryptoKey> => {
   try {
+    // Check if key is extractable
+    if (!baseKey.extractable) {
+      throw new Error("The base key is not extractable");
+    }
+    
     const keyMaterial = await window.crypto.subtle.exportKey("raw", baseKey);
     
     // Import as key material for derivation
@@ -134,7 +161,7 @@ const deriveKey = async (baseKey: CryptoKey, salt: Uint8Array): Promise<CryptoKe
       ["deriveBits", "deriveKey"]
     );
     
-    // Derive a new key using PBKDF2
+    // Derive a new key using PBKDF2 with explicit extractable:true
     return window.crypto.subtle.deriveKey(
       {
         name: "PBKDF2",
@@ -143,8 +170,11 @@ const deriveKey = async (baseKey: CryptoKey, salt: Uint8Array): Promise<CryptoKe
         hash: "SHA-256",
       },
       importedKeyMaterial,
-      { name: "AES-GCM", length: 256 },
-      true, // Make derived keys extractable
+      { 
+        name: "AES-GCM", 
+        length: 256 
+      },
+      true, // CRITICAL: Explicitly set extractable to true
       ["encrypt", "decrypt"]
     );
   } catch (error) {
@@ -160,6 +190,11 @@ const deriveKey = async (baseKey: CryptoKey, salt: Uint8Array): Promise<CryptoKe
 // Encrypt a message with forward secrecy concept
 export const encryptMessage = async (message: string, key: CryptoKey): Promise<string> => {
   try {
+    // Verify key is valid and extractable
+    if (!key.extractable) {
+      throw new Error("The encryption key is not extractable");
+    }
+    
     // Generate random salt and IV for this message
     const salt = generateSalt();
     const iv = generateIV();
@@ -167,7 +202,7 @@ export const encryptMessage = async (message: string, key: CryptoKey): Promise<s
     // Derive a unique message key (similar to Signal's message keys)
     const messageKey = await deriveKey(key, salt);
     
-    // Encode the message
+    // Encode the message using TextEncoder for better cross-browser compatibility
     const encoded = new TextEncoder().encode(message);
     
     // Encrypt with the derived key
@@ -202,6 +237,11 @@ export const encryptMessage = async (message: string, key: CryptoKey): Promise<s
 export const decryptMessage = async (encryptedMessage: string, key: CryptoKey): Promise<string> => {
   try {
     console.log("Decrypting message, input length:", encryptedMessage.length);
+    
+    // Verify key is valid and extractable
+    if (!key.extractable) {
+      throw new Error("The decryption key is not extractable");
+    }
     
     // Make sure to trim any whitespace
     const trimmedMessage = encryptedMessage.trim();
@@ -246,6 +286,7 @@ export const decryptMessage = async (encryptedMessage: string, key: CryptoKey): 
       ciphertext
     );
     
+    // Use TextDecoder for better cross-browser compatibility
     return new TextDecoder().decode(decrypted);
   } catch (error) {
     console.error("Decryption error:", error);
@@ -265,4 +306,3 @@ export const generateToken = (): string => {
     .map(b => b.toString(16).padStart(2, "0"))
     .join("");
 };
-

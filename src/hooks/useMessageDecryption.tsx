@@ -20,10 +20,13 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
   const [expiryInfo, setExpiryInfo] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   
-  // Debug log function
-  const addDebugInfo = (message: string) => {
-    setDebugInfo(prev => [...prev, `${new Date().toISOString().substring(11, 23)}: ${message}`]);
-    console.log("DEBUG:", message);
+  // Debug log function with log level
+  const addDebugInfo = (message: string, level: 'info' | 'warning' | 'error' | 'success' = 'info') => {
+    const prefix = level === 'error' ? 'ERROR: ' : 
+                   level === 'warning' ? 'WARNING: ' : 
+                   level === 'success' ? 'SUCCESS: ' : '';
+    setDebugInfo(prev => [...prev, `${new Date().toISOString().substring(11, 23)}: ${prefix}${message}`]);
+    console.log(`${level.toUpperCase()}:`, message);
   };
   
   useEffect(() => {
@@ -42,6 +45,7 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
         
         if (!message) {
           setError("Message not found. It may have been deleted or expired.");
+          addDebugInfo("Message not found in storage", 'error');
           setLoading(false);
           return;
         }
@@ -53,6 +57,7 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
         if (isMessageExpired(message)) {
           deleteMessage(id);
           setError("This message has expired and is no longer available.");
+          addDebugInfo("Message has expired and was deleted", 'error');
           setLoading(false);
           return;
         }
@@ -65,7 +70,7 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
           // 1. Check if user created this message and has saved the key
           const storedKey = getEncryptionKey(id);
           if (storedKey) {
-            addDebugInfo("Found stored encryption key for this message");
+            addDebugInfo("Found stored encryption key for this message", 'success');
             keyFragment = storedKey;
           } 
           // 2. Check if this message was shared with the current user
@@ -76,14 +81,14 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
             const storedSharedKey = getEncryptionKey(id);
             if (storedSharedKey) {
               keyFragment = storedSharedKey;
-              addDebugInfo("Retrieved shared encryption key");
+              addDebugInfo("Retrieved shared encryption key", 'success');
             }
           }
         }
         
         if (!keyFragment) {
           setError("Missing decryption key. The URL may be incomplete or you don't have access to this message.");
-          addDebugInfo("No key fragment found in URL hash or stored keys");
+          addDebugInfo("No key fragment found in URL hash or stored keys", 'error');
           setLoading(false);
           return;
         }
@@ -97,12 +102,18 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
           // Import the key with error handling
           addDebugInfo("Attempting to import key...");
           const key = await importKey(keyFragment);
-          addDebugInfo("Key imported successfully");
+          addDebugInfo("Key imported successfully", 'success');
           
           // Decrypt the message with enhanced encryption
           addDebugInfo("Attempting to decrypt message...");
           const decrypted = await decryptMessage(message.encryptedContent, key);
-          addDebugInfo(`Message decrypted successfully, length: ${decrypted.length}`);
+          
+          // Validate the decrypted content
+          if (!decrypted || decrypted.length === 0) {
+            throw new Error("Decryption resulted in empty content");
+          }
+          
+          addDebugInfo(`Message decrypted successfully, length: ${decrypted.length}`, 'success');
           
           // Update view count
           const updatedMessage = incrementMessageViews(id);
@@ -131,10 +142,10 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
           console.error("Decryption error:", error);
           if (error instanceof Error) {
             setError(`Failed to decrypt the message. ${error.message}`);
-            addDebugInfo(`Decryption error: ${error.message}`);
+            addDebugInfo(`Decryption error: ${error.message}`, 'error');
           } else {
             setError("Failed to decrypt the message. This might be due to an incorrect key or the message was encrypted with a different version of the app.");
-            addDebugInfo("Unknown decryption error");
+            addDebugInfo("Unknown decryption error", 'error');
           }
           setLoading(false);
           return;
@@ -143,10 +154,10 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
         console.error("Error viewing message:", error);
         if (error instanceof Error) {
           setError(`Failed to decrypt the message. ${error.message}`);
-          addDebugInfo(`Error viewing message: ${error.message}`);
+          addDebugInfo(`Error viewing message: ${error.message}`, 'error');
         } else {
           setError("Failed to decrypt the message. The key may be incorrect.");
-          addDebugInfo("Unknown error viewing message");
+          addDebugInfo("Unknown error viewing message", 'error');
         }
       } finally {
         setLoading(false);

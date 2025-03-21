@@ -1,4 +1,3 @@
-
 export interface MessageData {
   id: string;
   encryptedContent: string;
@@ -214,11 +213,16 @@ export const cleanupExpiredMessages = () => {
  */
 export const storeEncryptionKey = (messageId: string, encodedKey: string) => {
   try {
+    // Trim the key to avoid whitespace issues during cross-browser decryption
+    const trimmedKey = encodedKey.trim();
+    
     const keysStore = localStorage.getItem('secureMessageKeys') || '{}';
     const keys = JSON.parse(keysStore);
     
-    keys[messageId] = encodedKey;
+    keys[messageId] = trimmedKey;
     localStorage.setItem('secureMessageKeys', JSON.stringify(keys));
+    
+    console.log(`Key stored for message ID: ${messageId}, key length: ${trimmedKey.length}`);
     return true;
   } catch (error) {
     console.error('Error storing encryption key:', error);
@@ -234,7 +238,11 @@ export const getEncryptionKey = (messageId: string): string | null => {
     const keysStore = localStorage.getItem('secureMessageKeys') || '{}';
     const keys = JSON.parse(keysStore);
     
-    return keys[messageId] || null;
+    const key = keys[messageId] || null;
+    if (key) {
+      console.log(`Retrieved key for message ID: ${messageId}, key length: ${key.length}`);
+    }
+    return key;
   } catch (error) {
     console.error('Error retrieving encryption key:', error);
     return null;

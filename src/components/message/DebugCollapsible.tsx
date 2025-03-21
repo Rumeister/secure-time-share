@@ -11,20 +11,28 @@ interface DebugCollapsibleProps {
 const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
   const [showDebug, setShowDebug] = useState(false);
   const hasErrors = debugInfo.some(log => log.toLowerCase().includes("error"));
+  const hasWarnings = debugInfo.some(log => log.toLowerCase().includes("warning"));
+  
+  // Get the variant based on log content
+  const getButtonVariant = () => {
+    if (hasErrors) return "destructive";
+    if (hasWarnings) return "outline";
+    return "ghost";
+  };
   
   return (
     <Collapsible>
       <div className="flex justify-center mb-4">
         <CollapsibleTrigger asChild>
           <Button 
-            variant={hasErrors ? "destructive" : "ghost"}
+            variant={getButtonVariant()}
             size="sm" 
             onClick={() => setShowDebug(!showDebug)} 
             className="text-xs flex items-center"
           >
             <Bug className="mr-1 h-3.5 w-3.5" />
             {showDebug ? "Hide Debug Info" : `Show Debug Info${
-              hasErrors ? " (Has Errors)" : ""
+              hasErrors ? " (Has Errors)" : hasWarnings ? " (Has Warnings)" : ""
             }`}
           </Button>
         </CollapsibleTrigger>
@@ -35,7 +43,11 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
           {debugInfo.length > 0 ? debugInfo.map((log, i) => (
             <div 
               key={i} 
-              className={log.toLowerCase().includes("error") ? "text-red-500" : ""}
+              className={
+                log.toLowerCase().includes("error") ? "text-red-500" : 
+                log.toLowerCase().includes("warning") ? "text-amber-500" : 
+                log.toLowerCase().includes("success") ? "text-green-600" : ""
+              }
             >
               {log}
             </div>

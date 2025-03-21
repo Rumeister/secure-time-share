@@ -2,7 +2,14 @@
 import { useState, useEffect } from "react";
 import { useUser } from "@clerk/clerk-react";
 import { decryptMessage, importKey } from "@/lib/encryption";
-import { getMessage, incrementMessageViews, isMessageExpired, deleteMessage, getEncryptionKey } from "@/lib/storage";
+import { 
+  getMessage, 
+  incrementMessageViews, 
+  isMessageExpired, 
+  deleteMessage, 
+  getEncryptionKey, 
+  getStorageStats 
+} from "@/lib/storage";
 import { toast } from "sonner";
 
 interface UseMessageDecryptionResult {
@@ -42,32 +49,19 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
       try {
         addDebugInfo(`Starting decryption process for message ID: ${id}`);
         
-        // List all message IDs in localStorage for debugging
-        try {
-          const messagesString = localStorage.getItem('secureMessages');
-          const messages = messagesString ? JSON.parse(messagesString) : [];
-          addDebugInfo(`Found ${messages.length} messages in localStorage`);
-          if (messages.length > 0) {
-            addDebugInfo(`Available message IDs: ${messages.map((m: any) => m.id).join(', ')}`);
-          }
-        } catch (e) {
-          addDebugInfo(`Error checking localStorage messages: ${e instanceof Error ? e.message : String(e)}`, 'error');
-        }
+        // Show storage stats for debugging
+        const stats = getStorageStats();
+        addDebugInfo(`Storage contains ${stats.messages} messages and ${stats.keys} encryption keys`);
         
-        // Get encrypted message from storage
+        // Get encrypted message from storage with more robust error handling
         const message = getMessage(id);
         
         if (!message) {
           setError("Message not found. It may have been deleted or expired.");
           addDebugInfo(`Message with ID ${id} not found in storage`, 'error');
-          addDebugInfo("Checking localStorage directly...");
           
-          // Direct check in localStorage for debugging
+          // Try to dump contents of localStorage for debugging
           try {
-            const allStorage = { ...localStorage };
-            addDebugInfo(`All localStorage keys: ${Object.keys(allStorage).join(', ')}`);
-            
-            // Check if secureMessages exists and has content
             const secureMessages = localStorage.getItem('secureMessages');
             if (!secureMessages) {
               addDebugInfo("'secureMessages' key not found in localStorage", 'error');
@@ -75,9 +69,48 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
               addDebugInfo("'secureMessages' is empty array", 'warning');
             } else {
               addDebugInfo(`'secureMessages' exists and has content (length: ${secureMessages.length})`);
+              
+              try {
+                const parsedMessages = JSON.parse(secureMessages);
+                if (Array.isArray(parsedMessages) && parsedMessages.length > 0) {
+                  addDebugInfo(`Available message IDs: ${parsedMessages.map((m: any) => m.id).join(', ')}`);
+                  
+                  // Check for similar IDs (partial matches)
+                  const similarIds = parsedMessages.filter((m: any) => 
+                    m.id.includes(id.substring(0, 10)) || id.includes(m.id.substring(0, 10))
+                  );
+                  
+                  if (similarIds.length > 0) {
+                    addDebugInfo(`Found ${similarIds.length} messages with similar IDs`, 'warning');
+                    similarIds.forEach((m: any) => {
+                      addDebugInfo(`Similar ID: ${m.id}, created: ${new Date(m.createdAt).toLocaleString()}`);
+                    });
+                  }
+                }
+              } catch (e) {
+                addDebugInfo(`Error parsing messages JSON: ${e instanceof Error ? e.message : String(e)}`, 'error');
+              }
             }
+            
+            // Also check encryption keys
+            const keysStore = localStorage.getItem('secureMessageKeys');
+            if (!keysStore) {
+              addDebugInfo("'secureMessageKeys' not found in localStorage", 'warning');
+            } else {
+              try {
+                const keys = JSON.parse(keysStore);
+                const keyIds = Object.keys(keys);
+                addDebugInfo(`Found ${keyIds.length} stored encryption keys`);
+                if (keyIds.length > 0) {
+                  addDebugInfo(`Available key IDs: ${keyIds.join(', ')}`);
+                }
+              } catch (e) {
+                addDebugInfo(`Error parsing keys JSON: ${e instanceof Error ? e.message : String(e)}`, 'error');
+              }
+            }
+            
           } catch (e) {
-            addDebugInfo(`Error accessing localStorage directly: ${e instanceof Error ? e.message : String(e)}`, 'error');
+            addDebugInfo(`Error accessing localStorage: ${e instanceof Error ? e.message : String(e)}`, 'error');
           }
           
           setLoading(false);
@@ -85,6 +118,7 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
         }
         
         addDebugInfo(`Message found in storage, created at: ${new Date(message.createdAt).toLocaleString()}`, 'success');
+        addDebugInfo(`Message properties: maxViews=${message.maxViews}, currentViews=${message.currentViews}, expiresAt=${message.expiresAt ? new Date(message.expiresAt).toLocaleString() : 'never'}`);
         addDebugInfo(`Encrypted content length: ${message.encryptedContent.length}`);
         
         // Check if message is expired
@@ -102,28 +136,32 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
         addDebugInfo(`URL fragment present: ${keyFragment ? 'Yes' : 'No'}`);
         
         // If no key in URL, check if the user is the owner or a shared recipient
-        if (!keyFragment && isSignedIn) {
-          addDebugInfo(`User is signed in as: ${user?.primaryEmailAddress?.emailAddress || user?.id}`);
-          
-          // 1. Check if user created this message and has saved the key
-          const storedKey = getEncryptionKey(id);
-          if (storedKey) {
-            addDebugInfo("Found stored encryption key for this message", 'success');
-            keyFragment = storedKey;
-          } 
-          // 2. Check if this message was shared with the current user
-          else if (message.sharedWithUsers?.includes(user?.id || "") || message.ownerId === user?.id) {
-            addDebugInfo(`Message ownership: ${message.ownerId === user?.id ? 'User is owner' : 'Message shared with user'}`);
-            // In a real app, you would fetch the key from a secure server
-            const storedSharedKey = getEncryptionKey(id);
-            if (storedSharedKey) {
-              keyFragment = storedSharedKey;
-              addDebugInfo("Retrieved shared encryption key", 'success');
+        if (!keyFragment) {
+          if (isSignedIn) {
+            addDebugInfo(`User is signed in as: ${user?.primaryEmailAddress?.emailAddress || user?.id}`);
+            
+            // 1. Check if user created this message and has saved the key
+            const storedKey = getEncryptionKey(id);
+            if (storedKey) {
+              addDebugInfo("Found stored encryption key for this message", 'success');
+              keyFragment = storedKey;
+            } 
+            // 2. Check if this message was shared with the current user
+            else if (message.sharedWithUsers?.includes(user?.id || "") || message.ownerId === user?.id) {
+              addDebugInfo(`Message ownership: ${message.ownerId === user?.id ? 'User is owner' : 'Message shared with user'}`);
+              // Try to get the key again (added redundancy)
+              const storedSharedKey = getEncryptionKey(id);
+              if (storedSharedKey) {
+                keyFragment = storedSharedKey;
+                addDebugInfo("Retrieved shared encryption key", 'success');
+              } else {
+                addDebugInfo("User has access to this message but no encryption key found", 'warning');
+              }
             } else {
-              addDebugInfo("User has access to this message but no encryption key found", 'warning');
+              addDebugInfo("User is signed in but has no relation to this message", 'warning');
             }
           } else {
-            addDebugInfo("User is signed in but has no relation to this message", 'warning');
+            addDebugInfo("User is not signed in, can only decrypt with URL fragment", 'info');
           }
         }
         
@@ -140,12 +178,12 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
         addDebugInfo(`Key fragment found, length: ${keyFragment.length}`);
         
         try {
-          // Import the key with error handling
+          // Import the key with better error handling
           addDebugInfo("Attempting to import key...");
           const key = await importKey(keyFragment);
           addDebugInfo("Key imported successfully", 'success');
           
-          // Decrypt the message with enhanced encryption
+          // Decrypt the message
           addDebugInfo("Attempting to decrypt message...");
           const decrypted = await decryptMessage(message.encryptedContent, key);
           
@@ -156,18 +194,26 @@ export const useMessageDecryption = (id: string | undefined): UseMessageDecrypti
           
           addDebugInfo(`Message decrypted successfully, length: ${decrypted.length}`, 'success');
           
-          // Update view count
+          // Update view count AFTER successful decryption
           const updatedMessage = incrementMessageViews(id);
           
           if (updatedMessage) {
+            addDebugInfo(`View count incremented: ${message.currentViews} -> ${updatedMessage.currentViews}`);
+            
             // Set expiry info
             if (updatedMessage.maxViews !== null) {
               const remainingViews = updatedMessage.maxViews - updatedMessage.currentViews;
-              setExpiryInfo(`This message will be deleted ${remainingViews <= 0 ? 'after this view' : `after ${remainingViews} more view${remainingViews !== 1 ? 's' : ''}`}.`);
+              const expiryMessage = `This message will be deleted ${remainingViews <= 0 ? 'after this view' : `after ${remainingViews} more view${remainingViews !== 1 ? 's' : ''}`}.`;
+              setExpiryInfo(expiryMessage);
+              addDebugInfo(expiryMessage);
             } else if (updatedMessage.expiresAt) {
               const expiryDate = new Date(updatedMessage.expiresAt);
-              setExpiryInfo(`This message will expire on ${expiryDate.toLocaleString()}.`);
+              const expiryMessage = `This message will expire on ${expiryDate.toLocaleString()}.`;
+              setExpiryInfo(expiryMessage);
+              addDebugInfo(expiryMessage);
             }
+          } else {
+            addDebugInfo("Failed to increment view count", 'warning');
           }
           
           // Set the decrypted message

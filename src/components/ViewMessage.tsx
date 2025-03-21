@@ -1,6 +1,6 @@
 
 import { useParams, useNavigate } from "react-router-dom";
-import { LockKeyhole } from "lucide-react";
+import { LockKeyhole, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMessageDecryption } from "@/hooks/useMessageDecryption";
 import MessageLoading from "./message/MessageLoading";
@@ -13,6 +13,10 @@ const ViewMessage = () => {
   const navigate = useNavigate();
   
   const { decryptedMessage, loading, error, expiryInfo, debugInfo } = useMessageDecryption(id);
+  
+  const handleReloadPage = () => {
+    window.location.reload();
+  };
   
   if (loading) {
     return <MessageLoading />;
@@ -30,6 +34,9 @@ const ViewMessage = () => {
             <LockKeyhole className="h-5 w-5 text-primary mr-2" />
             <h2 className="text-2xl font-semibold tracking-tight">Secure Message</h2>
           </div>
+          <Button variant="ghost" size="sm" onClick={handleReloadPage} title="Reload page">
+            <RefreshCcw className="h-4 w-4" />
+          </Button>
         </div>
         
         {decryptedMessage && (

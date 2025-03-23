@@ -1,4 +1,3 @@
-
 export interface MessageData {
   id: string;
   encryptedContent: string;
@@ -132,50 +131,103 @@ export const getMessage = (id: string): MessageData | undefined => {
       return undefined;
     }
     
-    // Log all available message IDs for debugging
+    // Clean the ID - trim whitespace
+    const cleanId = id.trim();
+    console.log(`Looking for message with ID: ${cleanId}`);
+    
+    // Get all messages for debugging
     const allMessages = getAllMessages();
-    console.log(`Looking for message ID: ${id}`);
-    console.log(`Available message IDs: ${allMessages.map(m => m.id).join(', ')}`);
+    console.log(`Found ${allMessages.length} messages in localStorage`);
     
-    // Try all possible places where the message could be stored
-    
-    // 1. First check in global storage
-    const messages = getAllMessages();
-    const message = messages.find(message => message.id === id);
-    
-    if (message) {
-      console.log(`Message ${id} found in global storage`);
-      return message;
+    if (allMessages.length > 0) {
+      console.log(`Available message IDs: ${allMessages.map(m => m.id).join(', ')}`);
     }
     
-    // 2. Check user-specific storage
-    const userId = getUserId();
-    if (userId) {
-      const userMessages = getUserMessages();
-      const userMessage = userMessages.find(message => message.id === id);
-      if (userMessage) {
-        console.log(`Message ${id} found in user-specific storage`);
-        return userMessage;
-      }
+    // 1. First try exact match
+    const exactMatch = allMessages.find(message => message.id === cleanId);
+    if (exactMatch) {
+      console.log(`Found exact match for message ID: ${cleanId}`);
+      return exactMatch;
     }
     
-    // 3. Try to look for partial ID matches (for cross-browser compatibility)
-    // Some browsers might truncate long IDs in localStorage
-    const partialMatches = messages.filter(message => 
-      id.includes(message.id) || message.id.includes(id)
+    // 2. Try case-insensitive match (cross-browser issue where case might be different)
+    const caseInsensitiveMatch = allMessages.find(
+      message => message.id.toLowerCase() === cleanId.toLowerCase()
+    );
+    if (caseInsensitiveMatch) {
+      console.log(`Found case-insensitive match for message ID: ${cleanId}`);
+      return caseInsensitiveMatch;
+    }
+    
+    // 3. Check for partial ID matches (major cross-browser compatibility)
+    console.log("Checking for partial ID matches...");
+    
+    // Sort potential partial matches by confidence level
+    // Confidence is based on:
+    // a) Length of matching substring
+    // b) Position of match (a match at beginning is stronger)
+    
+    const partialMatches = allMessages
+      .map(message => {
+        // Get the longest matching substring
+        let longestMatch = 0;
+        
+        // Check if one is a substring of the other
+        if (message.id.includes(cleanId)) {
+          longestMatch = cleanId.length;
+        } else if (cleanId.includes(message.id)) {
+          longestMatch = message.id.length;
+        } else {
+          // Try to find common substring (minimum 10 chars to be significant)
+          for (let i = 0; i < message.id.length - 10; i++) {
+            for (let len = 10; len <= message.id.length - i; len++) {
+              const substr = message.id.substring(i, i + len);
+              if (cleanId.includes(substr) && len > longestMatch) {
+                longestMatch = len;
+              }
+            }
+          }
+        }
+        
+        // Calculate percentage match (prioritize beginning of string matches)
+        const beginningMatch = message.id.startsWith(cleanId.substring(0, 10)) || 
+                             cleanId.startsWith(message.id.substring(0, 10));
+        
+        const confidence = longestMatch + (beginningMatch ? 10 : 0);
+        
+        return { 
+          message, 
+          confidence,
+          longestMatch
+        };
+      })
+      .filter(match => match.longestMatch >= 10) // Only consider significant matches
+      .sort((a, b) => b.confidence - a.confidence); // Sort by confidence
+    
+    if (partialMatches.length > 0) {
+      const bestMatch = partialMatches[0];
+      console.log(`Found partial ID match with confidence ${bestMatch.confidence}, matching ${bestMatch.longestMatch} characters`);
+      console.log(`Best match ID: ${bestMatch.message.id}`);
+      return bestMatch.message;
+    }
+    
+    // 4. Check if the ID was truncated (some browsers may truncate long IDs)
+    const truncatedMatches = allMessages.filter(message => 
+      message.id.startsWith(cleanId.substring(0, 20)) || 
+      cleanId.startsWith(message.id.substring(0, 20))
     );
     
-    if (partialMatches.length === 1) {
-      console.log(`Message ${id} found via partial ID match: ${partialMatches[0].id}`);
-      return partialMatches[0];
-    } else if (partialMatches.length > 1) {
-      console.warn(`Multiple partial matches found for ID ${id}, using most recent`);
-      // Sort by creation date (newest first) and use the most recent
-      const sorted = [...partialMatches].sort((a, b) => b.createdAt - a.createdAt);
+    if (truncatedMatches.length === 1) {
+      console.log(`Found possible truncated ID match: ${truncatedMatches[0].id}`);
+      return truncatedMatches[0];
+    } else if (truncatedMatches.length > 1) {
+      // If multiple matches, sort by creation date and use most recent
+      const sorted = [...truncatedMatches].sort((a, b) => b.createdAt - a.createdAt);
+      console.log(`Multiple truncated matches found, using most recent: ${sorted[0].id}`);
       return sorted[0];
     }
     
-    console.warn(`Message ${id} not found in any storage`);
+    console.log(`Message ${cleanId} not found in storage`);
     return undefined;
   } catch (error) {
     console.error(`Error retrieving message ${id}:`, error);
@@ -282,6 +334,12 @@ export const incrementMessageViews = (id: string): MessageData | undefined => {
   try {
     const message = getMessage(id);
     if (message) {
+      // Check if this message is already at max views and should be deleted
+      if (message.maxViews !== null && message.currentViews >= message.maxViews) {
+        console.log(`Message ${id} has already reached max views (${message.maxViews}), skipping increment`);
+        return message;
+      }
+      
       const updatedMessage: MessageData = {
         ...message,
         currentViews: message.currentViews + 1,
@@ -291,7 +349,7 @@ export const incrementMessageViews = (id: string): MessageData | undefined => {
       
       // Check if this view should expire the message
       if (updatedMessage.maxViews !== null && updatedMessage.currentViews >= updatedMessage.maxViews) {
-        console.log(`Message ${id} has reached max views (${updatedMessage.maxViews}), will be marked for deletion`);
+        console.log(`Message ${id} has reached max views (${updatedMessage.maxViews}), will be marked for deletion after view`);
       }
       
       const success = updateMessage(updatedMessage);
@@ -378,8 +436,11 @@ export const storeEncryptionKey = (messageId: string, encodedKey: string) => {
       return false;
     }
     
-    // Trim the key to avoid whitespace issues 
+    // Clean the ID and key
+    const cleanId = messageId.trim();
     const trimmedKey = encodedKey.trim();
+    
+    console.log(`Storing key for message ID: ${cleanId}, key length: ${trimmedKey.length}`);
     
     const keysStore = localStorage.getItem('secureMessageKeys') || '{}';
     let keys = {};
@@ -391,10 +452,19 @@ export const storeEncryptionKey = (messageId: string, encodedKey: string) => {
       keys = {};
     }
     
-    keys[messageId] = trimmedKey;
-    localStorage.setItem('secureMessageKeys', JSON.stringify(keys));
+    // Store the key against the ID
+    keys[cleanId] = trimmedKey;
     
-    console.log(`Key stored for message ID: ${messageId}, key length: ${trimmedKey.length}`);
+    // Also store using a shorter version of the ID (first 20 chars)
+    // This helps with cross-browser compatibility where IDs might get truncated
+    const shortId = cleanId.substring(0, 20);
+    if (shortId !== cleanId) {
+      keys[shortId] = trimmedKey;
+      console.log(`Also storing key under shortened ID: ${shortId}`);
+    }
+    
+    localStorage.setItem('secureMessageKeys', JSON.stringify(keys));
+    console.log(`Key stored successfully for message ID: ${cleanId}`);
     return true;
   } catch (error) {
     console.error('Error storing encryption key:', error);
@@ -412,7 +482,9 @@ export const getEncryptionKey = (messageId: string): string | null => {
       return null;
     }
     
-    console.log(`Looking for encryption key for message: ${messageId}`);
+    // Clean the ID
+    const cleanId = messageId.trim();
+    console.log(`Looking for encryption key for message: ${cleanId}`);
     
     const keysStore = localStorage.getItem('secureMessageKeys') || '{}';
     let keys = {};
@@ -424,31 +496,91 @@ export const getEncryptionKey = (messageId: string): string | null => {
       return null;
     }
     
-    // Check for exact match
-    const key = keys[messageId] || null;
+    // Log keys for debugging
+    const keyIds = Object.keys(keys);
+    console.log(`Found ${keyIds.length} stored keys`);
+    if (keyIds.length > 0) {
+      console.log(`Available key IDs: ${keyIds.join(', ')}`);
+    }
     
+    // Check for exact match
+    const key = keys[cleanId];
     if (key) {
-      console.log(`Retrieved key for message ID: ${messageId}, key length: ${key.length}`);
+      console.log(`Retrieved key for exact message ID match: ${cleanId}, key length: ${key.length}`);
       return key;
     }
     
-    // If no exact match, try partial matching for cross-browser compatibility
-    const possibleMatches = Object.keys(keys).filter(
-      id => id.includes(messageId) || messageId.includes(id)
+    // Check for case-insensitive match
+    const caseInsensitiveKeyId = keyIds.find(
+      id => id.toLowerCase() === cleanId.toLowerCase()
     );
-    
-    if (possibleMatches.length === 1) {
-      const matchedKey = keys[possibleMatches[0]];
-      console.log(`Found key via partial ID match: ${possibleMatches[0]}, key length: ${matchedKey.length}`);
-      return matchedKey;
-    } else if (possibleMatches.length > 1) {
-      console.warn(`Multiple potential key matches for ID ${messageId}: ${possibleMatches.join(', ')}`);
-      // Use the first match as a fallback
-      return keys[possibleMatches[0]];
+    if (caseInsensitiveKeyId) {
+      const ciKey = keys[caseInsensitiveKeyId];
+      console.log(`Retrieved key for case-insensitive ID match: ${caseInsensitiveKeyId}, key length: ${ciKey.length}`);
+      return ciKey;
     }
     
-    console.warn(`No key found for message ID: ${messageId}`);
-    console.log(`Available key IDs: ${Object.keys(keys).join(', ')}`);
+    // Check for shortened ID (first 20 chars)
+    const shortId = cleanId.substring(0, 20);
+    const shortKey = keys[shortId];
+    if (shortKey) {
+      console.log(`Retrieved key for shortened ID: ${shortId}, key length: ${shortKey.length}`);
+      return shortKey;
+    }
+    
+    // Check for partial matches - using the same algorithm as getMessage
+    const partialMatchIds = keyIds.filter(id => {
+      // Look for significant substring matches
+      if (id.includes(cleanId) || cleanId.includes(id)) {
+        return true;
+      }
+      
+      // Check for common substrings of significant length
+      for (let i = 0; i < id.length - 10; i++) {
+        for (let len = 10; len <= id.length - i; len++) {
+          const substr = id.substring(i, i + len);
+          if (cleanId.includes(substr)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    });
+    
+    if (partialMatchIds.length === 1) {
+      const matchedKey = keys[partialMatchIds[0]];
+      console.log(`Retrieved key via partial ID match: ${partialMatchIds[0]}, key length: ${matchedKey.length}`);
+      return matchedKey;
+    } else if (partialMatchIds.length > 1) {
+      console.log(`Multiple potential key matches for ID ${cleanId}: ${partialMatchIds.join(', ')}`);
+      
+      // Get the most promising match (longest ID match with actual message)
+      const messages = getAllMessages();
+      const messageIds = messages.map(m => m.id);
+      
+      // Find partial match IDs that correspond to actual messages
+      const existingMessageMatches = partialMatchIds.filter(id => 
+        messageIds.some(mid => mid.includes(id) || id.includes(mid))
+      );
+      
+      if (existingMessageMatches.length === 1) {
+        const matchedKey = keys[existingMessageMatches[0]];
+        console.log(`Found single key match that corresponds to existing message: ${existingMessageMatches[0]}`);
+        return matchedKey;
+      } else if (existingMessageMatches.length > 0) {
+        // Use the first match
+        const matchedKey = keys[existingMessageMatches[0]];
+        console.log(`Using first of multiple key matches: ${existingMessageMatches[0]}`);
+        return matchedKey;
+      } else {
+        // No matches correspond to messages, just use the first one
+        const matchedKey = keys[partialMatchIds[0]];
+        console.log(`No key matches correspond to messages, using first match: ${partialMatchIds[0]}`);
+        return matchedKey;
+      }
+    }
+    
+    console.log(`No key found for message ID: ${cleanId}`);
     return null;
   } catch (error) {
     console.error('Error retrieving encryption key:', error);

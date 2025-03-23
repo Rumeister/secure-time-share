@@ -15,7 +15,18 @@ const ViewMessage = () => {
   const { decryptedMessage, loading, error, expiryInfo, debugInfo } = useMessageDecryption(id);
   
   const handleReloadPage = () => {
-    window.location.reload();
+    // Clear the URL fragment and reload to handle the case where the URL is malformed
+    if (window.location.hash) {
+      const keyFragment = window.location.hash.substring(1);
+      
+      // Try to re-navigate with a clean URL structure
+      const { pathname } = window.location;
+      const cleanUrl = `${pathname}#${keyFragment.trim()}`;
+      
+      window.location.href = cleanUrl;
+    } else {
+      window.location.reload();
+    }
   };
   
   if (loading) {
@@ -23,7 +34,12 @@ const ViewMessage = () => {
   }
   
   if (error) {
-    return <MessageError error={error} debugInfo={debugInfo} />;
+    return <MessageError 
+      error={error} 
+      debugInfo={debugInfo} 
+      onRetry={handleReloadPage}
+      onCreateNew={() => navigate("/create")} 
+    />;
   }
   
   return (

@@ -1,44 +1,69 @@
 
 import React, { useState } from "react";
-import { ShieldAlert, Bug, RefreshCcw } from "lucide-react";
+import { ShieldAlert, Bug, RefreshCcw, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Separator } from "@/components/ui/separator";
 
 interface MessageErrorProps {
   error: string;
   debugInfo: string[];
+  onRetry?: () => void;
+  onCreateNew?: () => void;
 }
 
-const MessageError = ({ error, debugInfo }: MessageErrorProps) => {
-  const navigate = useNavigate();
+const MessageError = ({ error, debugInfo, onRetry, onCreateNew }: MessageErrorProps) => {
   const [showDebug, setShowDebug] = useState(false);
-
-  const reloadPage = () => {
-    window.location.reload();
-  };
 
   return (
     <div className="glass-card p-6 md:p-8 w-full max-w-2xl mx-auto animate-scale-in space-y-6">
       <div className="flex justify-center">
         <ShieldAlert className="h-16 w-16 text-destructive" />
       </div>
-      <div className="text-center space-y-2">
+      <div className="text-center space-y-3">
         <h2 className="text-2xl font-semibold tracking-tight">Message Unavailable</h2>
         <p className="text-muted-foreground">{error}</p>
+        
+        <div className="pt-2">
+          <p className="text-sm">This may happen if:</p>
+          <ul className="text-sm text-left list-disc list-inside max-w-md mx-auto mt-2 space-y-1">
+            <li>The message has been viewed the maximum number of times</li>
+            <li>The message has expired</li>
+            <li>The URL is incomplete or incorrect</li>
+            <li>The message was deleted by its creator</li>
+          </ul>
+        </div>
+      </div>
+      
+      <Separator />
+      
+      <div className="flex justify-center gap-4">
+        {onRetry && (
+          <Button variant="outline" onClick={onRetry} className="flex items-center">
+            <RefreshCcw className="mr-2 h-4 w-4" />
+            Try Again
+          </Button>
+        )}
+        
+        {onCreateNew && (
+          <Button onClick={onCreateNew} className="flex items-center">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Create New Message
+          </Button>
+        )}
       </div>
       
       <Collapsible>
         <div className="flex justify-center">
           <CollapsibleTrigger asChild>
             <Button 
-              variant="outline" 
+              variant="ghost" 
               size="sm" 
               onClick={() => setShowDebug(!showDebug)} 
               className="text-xs flex items-center"
             >
               <Bug className="mr-1 h-3.5 w-3.5" />
-              {showDebug ? "Hide Debug Info" : "Show Debug Info"}
+              {showDebug ? "Hide Debug Info" : "Show Technical Details"}
             </Button>
           </CollapsibleTrigger>
         </div>
@@ -60,14 +85,6 @@ const MessageError = ({ error, debugInfo }: MessageErrorProps) => {
           </div>
         </CollapsibleContent>
       </Collapsible>
-      
-      <div className="flex justify-center gap-4 pt-4">
-        <Button variant="outline" onClick={reloadPage}>
-          <RefreshCcw className="mr-2 h-4 w-4" />
-          Retry
-        </Button>
-        <Button onClick={() => navigate("/create")}>Create a New Message</Button>
-      </div>
     </div>
   );
 };

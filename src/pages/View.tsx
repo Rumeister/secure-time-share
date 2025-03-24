@@ -2,11 +2,14 @@
 import { useEffect } from "react";
 import ViewMessage from "@/components/ViewMessage";
 import Layout from "@/components/Layout";
-import { cleanupExpiredMessages } from "@/lib/storage";
+import { cleanupExpiredMessages, performPeriodicCacheCleanup } from "@/lib/storage";
 
 const View = () => {
   useEffect(() => {
-    // Clean up any expired messages on page load
+    // Run more comprehensive cache cleanup on page load
+    performPeriodicCacheCleanup();
+    
+    // Also run the basic cleanup for expired messages
     cleanupExpiredMessages();
   }, []);
 

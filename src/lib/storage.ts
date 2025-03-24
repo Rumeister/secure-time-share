@@ -660,3 +660,125 @@ export const getStorageStats = () => {
     return { messages: 0, keys: 0, totalItems: 0 };
   }
 };
+
+/**
+ * Clears all message-related data from localStorage
+ * @param preserveUserData If true, preserves user-specific data
+ * @returns The number of items cleared
+ */
+export const clearMessageCache = (preserveUserData: boolean = true): number => {
+  try {
+    let clearedItems = 0;
+    
+    // Clear main message storage
+    localStorage.removeItem('secureMessages');
+    clearedItems++;
+    
+    // Clear encryption keys
+    localStorage.removeItem('secureMessageKeys');
+    clearedItems++;
+    
+    // If we're not preserving user data, clear user-specific message storage
+    if (!preserveUserData) {
+      const userId = getUserId();
+      if (userId) {
+        localStorage.removeItem(`userMessages_${userId}`);
+        clearedItems++;
+      }
+      
+      // Find and remove any legacy user message storage
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('userMessages_')) {
+          localStorage.removeItem(key);
+          clearedItems++;
+        }
+      }
+    }
+    
+    console.log(`Cleared ${clearedItems} message cache items from localStorage`);
+    return clearedItems;
+  } catch (error) {
+    console.error('Error clearing message cache:', error);
+    return 0;
+  }
+};
+
+/**
+ * Periodically cleans up the localStorage to prevent bloat
+ * Called automatically on a schedule and on app startup
+ */
+export const performPeriodicCacheCleanup = (): void => {
+  try {
+    const lastCleanupTime = localStorage.getItem('lastCacheCleanup');
+    const currentTime = Date.now();
+    
+    // Check if we need to do a cleanup (daily)
+    if (!lastCleanupTime || (currentTime - parseInt(lastCleanupTime)) > 86400000) {
+      console.log('Performing periodic cache cleanup...');
+      
+      // Clean up expired messages
+      const expiredCount = cleanupExpiredMessages();
+      
+      // Clean up orphaned keys (keys without corresponding messages)
+      const orphanedKeyCount = cleanupOrphanedKeys();
+      
+      // Update cleanup timestamp
+      localStorage.setItem('lastCacheCleanup', currentTime.toString());
+      
+      console.log(`Periodic cleanup complete. Removed ${expiredCount} expired messages and ${orphanedKeyCount} orphaned keys.`);
+    }
+  } catch (error) {
+    console.error('Error in periodic cache cleanup:', error);
+  }
+};
+
+/**
+ * Cleans up encryption keys that don't have corresponding messages
+ */
+export const cleanupOrphanedKeys = (): number => {
+  try {
+    const messages = getAllMessages();
+    const messageIds = messages.map(m => m.id);
+    
+    // Get all keys
+    const keysStore = localStorage.getItem('secureMessageKeys') || '{}';
+    let keys = {};
+    
+    try {
+      keys = JSON.parse(keysStore);
+    } catch (e) {
+      console.error("Error parsing keys store:", e);
+      return 0;
+    }
+    
+    const keyIds = Object.keys(keys);
+    let removedCount = 0;
+    
+    // Find keys that don't have a corresponding message
+    const orphanedKeys = keyIds.filter(keyId => {
+      // Keep keys that have a corresponding message
+      return !messageIds.some(msgId => 
+        msgId === keyId || 
+        msgId.includes(keyId) || 
+        keyId.includes(msgId)
+      );
+    });
+    
+    // Remove orphaned keys
+    if (orphanedKeys.length > 0) {
+      orphanedKeys.forEach(keyId => {
+        delete keys[keyId];
+        removedCount++;
+      });
+      
+      localStorage.setItem('secureMessageKeys', JSON.stringify(keys));
+      console.log(`Removed ${removedCount} orphaned encryption keys`);
+    }
+    
+    return removedCount;
+  } catch (error) {
+    console.error('Error cleaning up orphaned keys:', error);
+    return 0;
+  }
+};

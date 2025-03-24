@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from "react";
-import { Bug, Database, RefreshCw } from "lucide-react";
+import { Bug, Database, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { getStorageStats } from "@/lib/storage";
+import { getStorageStats, clearMessageCache } from "@/lib/storage";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
 
 interface DebugCollapsibleProps {
   debugInfo: string[];
@@ -131,6 +132,12 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
     });
   };
   
+  const handleClearCache = () => {
+    const clearedItems = clearMessageCache();
+    toast.success(`Cleared message cache (${clearedItems} items removed)`);
+    refreshStorage();
+  };
+  
   return (
     <Collapsible>
       <div className="flex justify-center mb-4">
@@ -158,9 +165,15 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
               <Database className="h-3.5 w-3.5 mr-1" />
               <span>Storage: {storageInfo.messages} messages, {storageInfo.keys} keys, {storageInfo.totalItems} localStorage items</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={refreshStorage} className="h-6 w-6 p-0">
-              <RefreshCw className="h-3 w-3" />
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={refreshStorage} className="h-6 w-6 p-0">
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleClearCache} className="h-6" title="Clear message cache">
+                <Trash2 className="h-3 w-3 mr-1" /> 
+                <span className="text-xs">Clear Cache</span>
+              </Button>
+            </div>
           </div>
           
           {/* Message IDs */}

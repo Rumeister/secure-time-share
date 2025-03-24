@@ -7,7 +7,7 @@ import { performPeriodicCacheCleanup, cleanupExpiredMessages } from "@/lib/stora
 
 const Index = () => {
   useEffect(() => {
-    // Run more comprehensive cache cleanup on page load
+    // Run cache cleanup on page load, but don't clear valid messages
     performPeriodicCacheCleanup();
     
     // Also run the basic cleanup for expired messages

@@ -670,13 +670,48 @@ export const clearMessageCache = (preserveUserData: boolean = true): number => {
   try {
     let clearedItems = 0;
     
-    // Clear main message storage
-    localStorage.removeItem('secureMessages');
-    clearedItems++;
+    // Get the current messages from storage
+    const messagesStr = localStorage.getItem('secureMessages');
+    let messages = [];
     
-    // Clear encryption keys
-    localStorage.removeItem('secureMessageKeys');
-    clearedItems++;
+    // If preserveUserData is false, clear all messages
+    if (!preserveUserData) {
+      console.log("Clearing all messages from localStorage");
+      localStorage.removeItem('secureMessages');
+      clearedItems++;
+    } else {
+      console.log("Preserving valid messages, only cleaning expired ones");
+      // Only remove expired messages
+      try {
+        if (messagesStr) {
+          messages = JSON.parse(messagesStr);
+          if (Array.isArray(messages)) {
+            const initialCount = messages.length;
+            const validMessages = messages.filter(message => !isMessageExpired(message));
+            if (validMessages.length < initialCount) {
+              localStorage.setItem('secureMessages', JSON.stringify(validMessages));
+              clearedItems += (initialCount - validMessages.length);
+              console.log(`Removed ${initialCount - validMessages.length} expired messages`);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error cleaning up expired messages:", e);
+        // Reset the storage if there's corruption
+        localStorage.setItem('secureMessages', '[]');
+        clearedItems++;
+      }
+    }
+    
+    // Clear encryption keys, but only if we're not preserving user data
+    // or if we're getting rid of all messages
+    if (!preserveUserData) {
+      localStorage.removeItem('secureMessageKeys');
+      clearedItems++;
+    } else {
+      // Clean up orphaned keys (keys without corresponding messages)
+      cleanupOrphanedKeys();
+    }
     
     // If we're not preserving user data, clear user-specific message storage
     if (!preserveUserData) {

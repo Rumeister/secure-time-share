@@ -33,7 +33,10 @@ const ViewMessage = () => {
   };
   
   const handleClearCache = () => {
-    const clearedItems = clearMessageCache();
+    // Get cache clear mode: if we're getting an error, clear everything
+    const aggressive = !!error;
+    const clearedItems = clearMessageCache(!aggressive);
+    
     toast.success(`Cleared message cache (${clearedItems} items removed)`);
     
     // Reload the page with a clean URL (but preserve the message ID and key in hash)

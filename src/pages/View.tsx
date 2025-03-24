@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import ViewMessage from "@/components/ViewMessage";
 import Layout from "@/components/Layout";
-import { cleanupExpiredMessages, performPeriodicCacheCleanup, clearMessageCache } from "@/lib/storage";
+import { cleanupExpiredMessages, performPeriodicCacheCleanup } from "@/lib/storage";
 import { toast } from "sonner";
 
 const View = () => {
@@ -16,7 +16,7 @@ const View = () => {
     // Force a fresh page reload if requested via query param
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('clear-cache') === 'true') {
-      const clearedItems = clearMessageCache(true);
+      const clearedItems = clearMessageCache(false); // Don't clear everything!
       toast.success(`Cache cleared (${clearedItems} items removed)`);
     }
   }, []);

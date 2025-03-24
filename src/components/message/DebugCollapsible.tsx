@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { Bug, Database, RefreshCw, Trash2 } from "lucide-react";
+import { Bug, Database, RefreshCw, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { getStorageStats, clearMessageCache } from "@/lib/storage";
@@ -13,6 +13,7 @@ interface DebugCollapsibleProps {
 
 const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
   const [showDebug, setShowDebug] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
   const [storageInfo, setStorageInfo] = useState<{
     messages: number;
     keys: number;
@@ -40,6 +41,17 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
   // Count the number of errors and warnings
   const errorCount = debugInfo.filter(log => log.toLowerCase().includes("error")).length;
   const warningCount = debugInfo.filter(log => log.toLowerCase().includes("warning")).length;
+
+  // Update logs when debugInfo changes
+  useEffect(() => {
+    setLogs(debugInfo);
+  }, [debugInfo]);
+
+  // Clear logs
+  const handleClearLogs = () => {
+    setLogs([]);
+    toast.success("Debug logs cleared");
+  };
 
   // Update storage stats periodically
   useEffect(() => {
@@ -133,7 +145,7 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
   };
   
   const handleClearCache = () => {
-    const clearedItems = clearMessageCache();
+    const clearedItems = clearMessageCache(false);
     toast.success(`Cleared message cache (${clearedItems} items removed)`);
     refreshStorage();
   };
@@ -207,9 +219,20 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
           <Separator className="my-2" />
           
           {/* Debug logs with better styling */}
-          <div className="font-medium mb-1">Debug Logs:</div>
+          <div className="flex items-center justify-between mb-1">
+            <div className="font-medium">Debug Logs:</div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleClearLogs} 
+              className="h-6 px-2 py-0 text-xs"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear Logs
+            </Button>
+          </div>
           <div className="font-mono overflow-auto h-40 bg-white/80 p-2 rounded">
-            {debugInfo.length > 0 ? debugInfo.map((log, i) => (
+            {logs.length > 0 ? logs.map((log, i) => (
               <div 
                 key={i} 
                 className={

@@ -1,6 +1,6 @@
 
 import { useParams, useNavigate } from "react-router-dom";
-import { LockKeyhole, RefreshCcw } from "lucide-react";
+import { LockKeyhole, RefreshCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMessageDecryption } from "@/hooks/useMessageDecryption";
 import MessageLoading from "./message/MessageLoading";
@@ -8,6 +8,8 @@ import MessageError from "./message/MessageError";
 import MessageContent from "./message/MessageContent";
 import DebugCollapsible from "./message/DebugCollapsible";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { clearMessageCache } from "@/lib/storage";
+import { toast } from "sonner";
 
 const ViewMessage = () => {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +32,17 @@ const ViewMessage = () => {
     }
   };
   
+  const handleClearCache = () => {
+    const clearedItems = clearMessageCache();
+    toast.success(`Cleared message cache (${clearedItems} items removed)`);
+    
+    // Reload the page with a clean URL (but preserve the message ID and key in hash)
+    const { pathname } = window.location;
+    const hash = window.location.hash;
+    const cleanUrl = `${pathname}?clear-cache=true${hash}`;
+    window.location.href = cleanUrl;
+  };
+  
   if (loading) {
     return <MessageLoading />;
   }
@@ -38,8 +51,9 @@ const ViewMessage = () => {
     return <MessageError 
       error={error} 
       debugInfo={debugInfo} 
-      onRetry={handleReloadPage}
-      onCreateNew={() => navigate("/create")} 
+      onRetry={handleReloadPage} 
+      onCreateNew={() => navigate("/create")}
+      onClearCache={handleClearCache}
     />;
   }
   
@@ -56,9 +70,15 @@ const ViewMessage = () => {
             </Avatar>
             <h2 className="text-2xl font-semibold tracking-tight">Butterfly Message</h2>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleReloadPage} title="Reload page">
-            <RefreshCcw className="h-4 w-4" />
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={handleClearCache} title="Clear cache">
+              <Trash2 className="h-4 w-4 mr-1" />
+              Clear Cache
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleReloadPage} title="Reload page">
+              <RefreshCcw className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         
         {decryptedMessage && (

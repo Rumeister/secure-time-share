@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { ShieldAlert, Bug, RefreshCcw, PlusCircle } from "lucide-react";
+import { ShieldAlert, Bug, RefreshCcw, PlusCircle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Separator } from "@/components/ui/separator";
@@ -10,9 +10,10 @@ interface MessageErrorProps {
   debugInfo: string[];
   onRetry?: () => void;
   onCreateNew?: () => void;
+  onClearCache?: () => void;
 }
 
-const MessageError = ({ error, debugInfo, onRetry, onCreateNew }: MessageErrorProps) => {
+const MessageError = ({ error, debugInfo, onRetry, onCreateNew, onClearCache }: MessageErrorProps) => {
   const [showDebug, setShowDebug] = useState(false);
 
   return (
@@ -31,13 +32,21 @@ const MessageError = ({ error, debugInfo, onRetry, onCreateNew }: MessageErrorPr
             <li>The message has expired</li>
             <li>The URL is incomplete or incorrect</li>
             <li>The message was deleted by its creator</li>
+            <li>There's a browser cache issue with stored messages</li>
           </ul>
         </div>
       </div>
       
       <Separator />
       
-      <div className="flex justify-center gap-4">
+      <div className="flex justify-center gap-4 flex-wrap">
+        {onClearCache && (
+          <Button variant="secondary" onClick={onClearCache} className="flex items-center">
+            <Trash2 className="mr-2 h-4 w-4" />
+            Clear Cache
+          </Button>
+        )}
+        
         {onRetry && (
           <Button variant="outline" onClick={onRetry} className="flex items-center">
             <RefreshCcw className="mr-2 h-4 w-4" />

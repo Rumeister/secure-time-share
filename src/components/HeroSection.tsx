@@ -2,6 +2,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { LockKeyhole, Clock, Shield } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const HeroSection = () => {
   return (
@@ -18,6 +19,15 @@ const HeroSection = () => {
           <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-sm text-primary-foreground mb-6 animate-fade-in">
             <Shield className="mr-1 h-3.5 w-3.5" />
             <span className="text-primary">Client-side Encryption</span>
+          </div>
+          
+          <div className="flex items-center justify-center mb-6">
+            <Avatar className="h-20 w-20">
+              <AvatarImage src="/lovable-uploads/c3bf18e8-78c5-49f1-9604-51f7b2c3dca8.png" alt="Butterfly logo" className="object-contain" />
+              <AvatarFallback className="bg-primary/10">
+                <LockKeyhole className="h-10 w-10 text-primary" />
+              </AvatarFallback>
+            </Avatar>
           </div>
           
           <h1 className="max-w-4xl text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight animate-slide-up [animation-delay:100ms]">

@@ -1,10 +1,11 @@
 
 import { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { LockKeyhole, Shield, Clock, Menu, X } from "lucide-react";
+import { LockKeyhole, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { useUser, UserButton } from "@clerk/clerk-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 interface LayoutProps {
   children: ReactNode;
@@ -40,8 +41,13 @@ const Layout = ({ children }: LayoutProps) => {
                 to="/" 
                 className="flex items-center space-x-2 transition-all-200 hover:opacity-80"
               >
-                <Shield className="h-8 w-8 text-primary" />
-                <span className="text-lg font-semibold tracking-tight">SecureShare</span>
+                <Avatar className="h-10 w-10 rounded-full">
+                  <AvatarImage src="/lovable-uploads/c3bf18e8-78c5-49f1-9604-51f7b2c3dca8.png" alt="Butterfly logo" />
+                  <AvatarFallback className="bg-primary/10">
+                    <LockKeyhole className="h-5 w-5 text-primary" />
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-lg font-semibold tracking-tight">Butterfly</span>
               </Link>
             </div>
             
@@ -174,8 +180,13 @@ const Layout = ({ children }: LayoutProps) => {
           <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
             <div className="flex flex-col items-center gap-2 md:items-start">
               <Link to="/" className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
-                <span className="text-sm font-medium">SecureShare</span>
+                <Avatar className="h-6 w-6 rounded-full">
+                  <AvatarImage src="/lovable-uploads/c3bf18e8-78c5-49f1-9604-51f7b2c3dca8.png" alt="Butterfly logo" />
+                  <AvatarFallback className="bg-primary/10">
+                    <LockKeyhole className="h-3 w-3 text-primary" />
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-medium">Butterfly</span>
               </Link>
               <p className="text-center text-xs text-muted-foreground md:text-left">
                 Client-side encryption. Your data never leaves your device.
@@ -204,7 +215,7 @@ const Layout = ({ children }: LayoutProps) => {
                 Create
               </Link>
               <p className="text-xs text-muted-foreground">
-                © {new Date().getFullYear()} SecureShare. All rights reserved.
+                © {new Date().getFullYear()} Butterfly. All rights reserved.
               </p>
             </div>
           </div>

@@ -7,6 +7,7 @@ import MessageLoading from "./message/MessageLoading";
 import MessageError from "./message/MessageError";
 import MessageContent from "./message/MessageContent";
 import DebugCollapsible from "./message/DebugCollapsible";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const ViewMessage = () => {
   const { id } = useParams<{ id: string }>();
@@ -47,8 +48,13 @@ const ViewMessage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <LockKeyhole className="h-5 w-5 text-primary mr-2" />
-            <h2 className="text-2xl font-semibold tracking-tight">Secure Message</h2>
+            <Avatar className="h-6 w-6 mr-2">
+              <AvatarImage src="/lovable-uploads/c3bf18e8-78c5-49f1-9604-51f7b2c3dca8.png" alt="Butterfly logo" />
+              <AvatarFallback>
+                <LockKeyhole className="h-4 w-4 text-primary" />
+              </AvatarFallback>
+            </Avatar>
+            <h2 className="text-2xl font-semibold tracking-tight">Butterfly Message</h2>
           </div>
           <Button variant="ghost" size="sm" onClick={handleReloadPage} title="Reload page">
             <RefreshCcw className="h-4 w-4" />

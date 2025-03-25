@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from "react";
-import { Bug, Database, RefreshCw, Trash2, X } from "lucide-react";
+import { Bug, Database, RefreshCw, Trash2, X, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { getStorageStats, clearMessageCache } from "@/lib/storage";
+import { getStorageStats, clearMessageCache, forceReloadStorage } from "@/lib/storage";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
@@ -61,13 +62,19 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
       try {
         if (messagesStr) {
           rawContent = messagesStr;
-          const messages = JSON.parse(messagesStr);
-          if (Array.isArray(messages)) {
-            messageIds = messages.map(m => m.id);
-            console.log(`Found ${messages.length} messages in localStorage debug check`);
+          
+          if (messagesStr === '[]') {
+            console.warn("secureMessages is an empty array in debug check");
+            rawContent = "[]";
           } else {
-            console.warn("secureMessages is not an array in debug check");
-            rawContent = "ERROR: secureMessages is not an array: " + messagesStr;
+            const messages = JSON.parse(messagesStr);
+            if (Array.isArray(messages)) {
+              messageIds = messages.map(m => m.id);
+              console.log(`Found ${messages.length} messages in localStorage debug check`);
+            } else {
+              console.warn("secureMessages is not an array in debug check");
+              rawContent = "ERROR: secureMessages is not an array: " + messagesStr;
+            }
           }
         } else {
           rawContent = "null";
@@ -121,13 +128,18 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
     try {
       if (messagesStr) {
         rawContent = messagesStr;
-        const messages = JSON.parse(messagesStr);
-        if (Array.isArray(messages)) {
-          messageIds = messages.map(m => m.id);
-          console.log(`Found ${messages.length} messages in localStorage debug check`);
+        if (messagesStr === '[]') {
+          rawContent = "[]";
+          console.warn("secureMessages is an empty array in debug check");
         } else {
-          console.warn("secureMessages is not an array in debug check");
-          rawContent = "ERROR: secureMessages is not an array: " + messagesStr;
+          const messages = JSON.parse(messagesStr);
+          if (Array.isArray(messages)) {
+            messageIds = messages.map(m => m.id);
+            console.log(`Found ${messages.length} messages in localStorage debug check`);
+          } else {
+            console.warn("secureMessages is not an array in debug check");
+            rawContent = "ERROR: secureMessages is not an array: " + messagesStr;
+          }
         }
       } else {
         rawContent = "null";
@@ -165,6 +177,16 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
     refreshStorage();
   };
   
+  const handleForceReload = () => {
+    const success = forceReloadStorage();
+    if (success) {
+      toast.success("Storage reloaded successfully");
+    } else {
+      toast.warning("No messages to reload or reload failed");
+    }
+    refreshStorage();
+  };
+  
   const initializeStorage = () => {
     if (!localStorage.getItem('secureMessages')) {
       localStorage.setItem('secureMessages', '[]');
@@ -173,14 +195,19 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
       const messagesStr = localStorage.getItem('secureMessages');
       try {
         if (messagesStr) {
-          const messages = JSON.parse(messagesStr);
-          if (Array.isArray(messages)) {
-            console.log(`secureMessages already exists with ${messages.length} items`);
-            toast.info(`secureMessages already exists with ${messages.length} items`);
+          if (messagesStr === '[]') {
+            console.log("secureMessages already exists as empty array");
+            toast.info("secureMessages already exists as empty array");
           } else {
-            console.warn("secureMessages is not an array, resetting");
-            localStorage.setItem('secureMessages', '[]');
-            toast.warning("secureMessages was not an array, reset to empty array");
+            const messages = JSON.parse(messagesStr);
+            if (Array.isArray(messages)) {
+              console.log(`secureMessages already exists with ${messages.length} items`);
+              toast.info(`secureMessages already exists with ${messages.length} items`);
+            } else {
+              console.warn("secureMessages is not an array, resetting");
+              localStorage.setItem('secureMessages', '[]');
+              toast.warning("secureMessages was not an array, reset to empty array");
+            }
           }
         }
       } catch (e) {
@@ -229,6 +256,10 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={initializeStorage} className="h-6" title="Initialize storage">
                 <span className="text-xs">Init Storage</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleForceReload} className="h-6" title="Force reload storage">
+                <Save className="h-3 w-3 mr-1" />
+                <span className="text-xs">Force Reload</span>
               </Button>
               <Button variant="ghost" size="sm" onClick={refreshStorage} className="h-6 w-6 p-0">
                 <RefreshCw className="h-3 w-3" />

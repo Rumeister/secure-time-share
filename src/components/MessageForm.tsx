@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LockKeyhole, Copy, Check, Clock, Eye, Users, Link } from "lucide-react";
@@ -34,7 +35,7 @@ import {
   exportKey, 
   generateToken 
 } from "@/lib/encryption";
-import { saveMessage, getUserId, storeEncryptionKey } from "@/lib/storage";
+import { saveMessage, getUserId, storeEncryptionKey, getAllMessages } from "@/lib/storage";
 import { useUser } from "@clerk/clerk-react";
 
 interface UserShareFormProps {
@@ -218,10 +219,26 @@ const MessageForm = () => {
         const savedMessage = localStorage.getItem('secureMessages');
         console.log(`Storage after saving: ${savedMessage ? 'contains data' : 'empty'}, length: ${savedMessage?.length || 0}`);
         
+        // Force reload of messages to verify
+        const allMessages = getAllMessages();
+        console.log(`Retrieved ${allMessages.length} messages after saving, message exists: ${
+          allMessages.some(m => m.id === id) ? 'yes' : 'no'
+        }`);
+        
+        if (allMessages.length === 0 || !allMessages.some(m => m.id === id)) {
+          console.error("Message was not properly saved to storage!");
+          toast.error("Error: Message was not properly saved. Please try again.");
+          setLoading(false);
+          return;
+        }
+        
         // Store the encryption key for future access
         storeEncryptionKey(id, keyString);
       } catch (e) {
         console.error("Error verifying message storage:", e);
+        toast.error("Error verifying message storage. Please try again.");
+        setLoading(false);
+        return;
       }
       
       // Generate share link with the key in the fragment

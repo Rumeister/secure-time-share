@@ -1,4 +1,3 @@
-
 export interface MessageData {
   id: string;
   encryptedContent: string;
@@ -13,12 +12,18 @@ export interface MessageData {
 /**
  * Gets all messages from localStorage
  */
-const getAllMessages = (): MessageData[] => {
+export const getAllMessages = (): MessageData[] => {
   try {
     const messagesString = localStorage.getItem('secureMessages');
     if (!messagesString) {
       console.log("No 'secureMessages' found in localStorage");
       localStorage.setItem('secureMessages', '[]');
+      return [];
+    }
+    
+    // Check if the string is just an empty array
+    if (messagesString === '[]') {
+      console.log("'secureMessages' is an empty array");
       return [];
     }
     
@@ -73,16 +78,46 @@ export const saveMessage = (message: MessageData) => {
     
     // Store the updated messages
     const messagesJson = JSON.stringify(messages);
+    
+    // Make sure we're not storing an empty array string
+    if (messagesJson === '[]' && messages.length > 0) {
+      console.error("ERROR: Trying to save an empty array string when messages exist!");
+      return false;
+    }
+    
     localStorage.setItem('secureMessages', messagesJson);
     console.log(`Message ${message.id} saved successfully, storage size: ${messagesJson.length} chars, total messages: ${messages.length}`);
     
     // Force flush to localStorage to ensure persistence
     try {
       const verifyMessages = localStorage.getItem('secureMessages');
+      if (!verifyMessages || verifyMessages === '[]') {
+        console.error("ERROR: Messages not saved properly to localStorage!");
+        
+        // Try one more time with a more direct approach
+        const directSave = JSON.stringify([message]);
+        localStorage.setItem('secureMessages', directSave);
+        
+        const secondVerify = localStorage.getItem('secureMessages');
+        if (!secondVerify || secondVerify === '[]') {
+          console.error("ERROR: Second attempt to save messages failed!");
+          return false;
+        } else {
+          console.log("Second attempt to save messages succeeded");
+        }
+      }
+      
       const parsedMessages = verifyMessages ? JSON.parse(verifyMessages) : [];
       console.log(`Verified storage: ${verifyMessages ? 'success' : 'failed'}, storage size: ${verifyMessages?.length || 0} chars, message count: ${parsedMessages.length}`);
+      
+      // Final verification
+      if (parsedMessages.length === 0 && messages.length > 0) {
+        console.error("ERROR: Verification shows 0 messages when we should have some!");
+        return false;
+      }
     } catch (e) {
       console.error('Storage verification failed:', e);
+      return false;
     }
     
     // If user is signed in, also save to user's messages
@@ -430,6 +465,12 @@ export const cleanupExpiredMessages = () => {
     const messages = getAllMessages();
     let deletedCount = 0;
     
+    // Early exit if there are no messages to avoid unnecessary work
+    if (messages.length === 0) {
+      console.log("No messages to clean up");
+      return 0;
+    }
+    
     // Identify and delete expired messages
     messages.forEach(message => {
       if (isMessageExpired(message)) {
@@ -726,11 +767,24 @@ export const clearMessageCache = (preserveUserData: boolean = true): number => {
           messages = JSON.parse(messagesStr);
           if (Array.isArray(messages)) {
             const initialCount = messages.length;
+            
+            // Early exit if no messages to process
+            if (initialCount === 0) {
+              console.log("No messages to clean up");
+              return 0;
+            }
+            
             const validMessages = messages.filter(message => !isMessageExpired(message));
             
             // Only update storage if we actually removed something
             if (validMessages.length < initialCount) {
-              localStorage.setItem('secureMessages', JSON.stringify(validMessages));
+              // Make sure we're not saving an empty array when we have valid messages
+              if (validMessages.length > 0) {
+                localStorage.setItem('secureMessages', JSON.stringify(validMessages));
+              } else {
+                localStorage.setItem('secureMessages', '[]');
+              }
+              
               clearedItems += (initialCount - validMessages.length);
               console.log(`Removed ${initialCount - validMessages.length} expired messages, ${validMessages.length} remaining`);
             } else {
@@ -754,15 +808,10 @@ export const clearMessageCache = (preserveUserData: boolean = true): number => {
       }
     }
     
-    // Clear encryption keys, but only if we're not preserving user data
-    // or if we're getting rid of all messages
+    // Don't clear encryption keys by default - this was causing lost data
     if (!preserveUserData) {
       localStorage.removeItem('secureMessageKeys');
       clearedItems++;
-    } else {
-      // Clean up orphaned keys (keys without corresponding messages)
-      const orphanedKeyCount = cleanupOrphanedKeys();
-      clearedItems += orphanedKeyCount;
     }
     
     // If we're not preserving user data, clear user-specific message storage
@@ -893,3 +942,39 @@ export const cleanupOrphanedKeys = (): number => {
     return 0;
   }
 };
+
+/**
+ * Add a new function to force reload storage
+ */
+export function forceReloadStorage(): boolean {
+  try {
+    // Get the current messages
+    const messagesStr = localStorage.getItem('secureMessages');
+    if (!messagesStr || messagesStr === '[]') {
+      console.log("No messages to reload");
+      return false;
+    }
+    
+    // Try parsing them
+    let messages: MessageData[] = [];
+    try {
+      messages = JSON.parse(messagesStr);
+      if (!Array.isArray(messages) || messages.length === 0) {
+        console.log("No valid messages to reload");
+        return false;
+      }
+    } catch (e) {
+      console.error("Error parsing messages:", e);
+      return false;
+    }
+    
+    // Force rewrite them to storage
+    localStorage.setItem('secureMessages', JSON.stringify(messages));
+    console.log(`Forced reload of ${messages.length} messages`);
+    
+    return true;
+  } catch (error) {
+    console.error('Error forcing reload storage:', error);
+    return false;
+  }
+}

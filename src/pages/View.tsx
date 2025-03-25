@@ -2,7 +2,13 @@
 import { useEffect } from "react";
 import ViewMessage from "@/components/ViewMessage";
 import Layout from "@/components/Layout";
-import { cleanupExpiredMessages, performPeriodicCacheCleanup, clearMessageCache } from "@/lib/storage";
+import { 
+  cleanupExpiredMessages, 
+  performPeriodicCacheCleanup, 
+  clearMessageCache, 
+  forceReloadStorage,
+  getAllMessages
+} from "@/lib/storage";
 import { toast } from "sonner";
 
 const View = () => {
@@ -17,18 +23,29 @@ const View = () => {
       try {
         const messagesStr = localStorage.getItem('secureMessages');
         if (messagesStr) {
-          const messages = JSON.parse(messagesStr);
-          if (Array.isArray(messages)) {
-            console.log(`Found ${messages.length} messages in localStorage`);
+          if (messagesStr === '[]') {
+            console.log("secureMessages is an empty array");
           } else {
-            console.warn("secureMessages is not an array, resetting");
-            localStorage.setItem('secureMessages', '[]');
+            const messages = JSON.parse(messagesStr);
+            if (Array.isArray(messages)) {
+              console.log(`Found ${messages.length} messages in localStorage`);
+            } else {
+              console.warn("secureMessages is not an array, resetting");
+              localStorage.setItem('secureMessages', '[]');
+            }
           }
         }
       } catch (e) {
         console.error("Error checking secureMessages:", e);
         localStorage.setItem('secureMessages', '[]');
       }
+    }
+    
+    // Check if we have messages but they're not being found
+    const messages = getAllMessages();
+    if (messages.length === 0) {
+      // Try to force reload storage to fix potential issues
+      forceReloadStorage();
     }
     
     // Run more comprehensive cache cleanup on page load
@@ -50,6 +67,14 @@ const View = () => {
       try {
         const messagesStr = localStorage.getItem('secureMessages');
         console.log(`Storage after initialization: ${messagesStr ? 'contains data' : 'empty'}, length: ${messagesStr?.length || 0}`);
+        
+        // If there are URL params for a message but no messages in storage, try to reload
+        const urlParams = new URL(window.location.href);
+        const pathSegments = urlParams.pathname.split('/');
+        if (pathSegments.length > 2 && pathSegments[1] === 'view' && messagesStr === '[]') {
+          console.log("Detected message ID in URL but no messages in storage, trying to reload storage");
+          forceReloadStorage();
+        }
       } catch (e) {
         console.error("Error verifying storage:", e);
       }

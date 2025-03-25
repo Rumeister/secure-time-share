@@ -20,12 +20,14 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
     totalItems: number;
     messageIds: string[];
     keyIds: string[];
+    rawContent: string | null;
   }>({
     messages: 0,
     keys: 0,
     totalItems: 0,
     messageIds: [],
-    keyIds: []
+    keyIds: [],
+    rawContent: null
   });
   
   const hasErrors = debugInfo.some(log => log.toLowerCase().includes("error"));
@@ -62,15 +64,21 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
       // Get message IDs
       const messagesStr = localStorage.getItem('secureMessages');
       let messageIds: string[] = [];
+      let rawContent = null;
+      
       try {
         if (messagesStr) {
+          rawContent = messagesStr;
           const messages = JSON.parse(messagesStr);
           if (Array.isArray(messages)) {
             messageIds = messages.map(m => m.id);
           }
+        } else {
+          rawContent = "null";
         }
       } catch (e) {
         console.error("Error parsing messages:", e);
+        rawContent = "ERROR: " + String(e);
       }
       
       // Get key IDs
@@ -88,7 +96,8 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
       setStorageInfo({
         ...stats,
         messageIds,
-        keyIds
+        keyIds,
+        rawContent
       });
     };
     
@@ -114,15 +123,21 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
     // Get message IDs
     const messagesStr = localStorage.getItem('secureMessages');
     let messageIds: string[] = [];
+    let rawContent = null;
+    
     try {
       if (messagesStr) {
+        rawContent = messagesStr;
         const messages = JSON.parse(messagesStr);
         if (Array.isArray(messages)) {
           messageIds = messages.map(m => m.id);
         }
+      } else {
+        rawContent = "null";
       }
     } catch (e) {
       console.error("Error parsing messages:", e);
+      rawContent = "ERROR: " + String(e);
     }
     
     // Get key IDs
@@ -140,14 +155,27 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
     setStorageInfo({
       ...stats,
       messageIds,
-      keyIds
+      keyIds,
+      rawContent
     });
+    
+    toast.success("Storage information refreshed");
   };
   
   const handleClearCache = () => {
     // Clear all messages but preserve user data
     const clearedItems = clearMessageCache(true);
     toast.success(`Cleared message cache (${clearedItems} items removed)`);
+    refreshStorage();
+  };
+  
+  const initializeStorage = () => {
+    if (!localStorage.getItem('secureMessages')) {
+      localStorage.setItem('secureMessages', '[]');
+      toast.success("Initialized empty secureMessages array");
+    } else {
+      toast.info("secureMessages already exists");
+    }
     refreshStorage();
   };
   
@@ -179,6 +207,9 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
               <span>Storage: {storageInfo.messages} messages, {storageInfo.keys} keys, {storageInfo.totalItems} localStorage items</span>
             </div>
             <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={initializeStorage} className="h-6" title="Initialize storage">
+                <span className="text-xs">Init Storage</span>
+              </Button>
               <Button variant="ghost" size="sm" onClick={refreshStorage} className="h-6 w-6 p-0">
                 <RefreshCw className="h-3 w-3" />
               </Button>
@@ -188,6 +219,16 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
               </Button>
             </div>
           </div>
+          
+          {/* Raw localStorage content */}
+          {storageInfo.rawContent && (
+            <div className="mb-2 text-xs">
+              <div className="font-medium mb-1">Raw secureMessages content:</div>
+              <div className="font-mono break-all text-[10px] bg-white/80 p-1 overflow-auto max-h-20 rounded">
+                {storageInfo.rawContent}
+              </div>
+            </div>
+          )}
           
           {/* Message IDs */}
           {storageInfo.messageIds.length > 0 && (

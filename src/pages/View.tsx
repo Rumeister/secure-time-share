@@ -7,11 +7,19 @@ import { toast } from "sonner";
 
 const View = () => {
   useEffect(() => {
+    console.log("View page loaded, initializing storage and running cleanup");
+    
     // Run more comprehensive cache cleanup on page load
     performPeriodicCacheCleanup();
     
     // Also run the basic cleanup for expired messages
     cleanupExpiredMessages();
+    
+    // Ensure secureMessages exists in localStorage
+    if (!localStorage.getItem('secureMessages')) {
+      localStorage.setItem('secureMessages', '[]');
+      console.log("Initialized empty secureMessages array");
+    }
     
     // Force a fresh page reload if requested via query param
     const urlParams = new URLSearchParams(window.location.search);

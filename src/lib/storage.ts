@@ -1,3 +1,4 @@
+
 export interface MessageData {
   id: string;
   encryptedContent: string;
@@ -66,6 +67,14 @@ export const saveMessage = (message: MessageData) => {
     const messagesJson = JSON.stringify(messages);
     localStorage.setItem('secureMessages', messagesJson);
     console.log(`Message ${message.id} saved successfully, storage size: ${messagesJson.length} chars`);
+    
+    // Force flush to localStorage to ensure persistence
+    try {
+      const verifyMessages = localStorage.getItem('secureMessages');
+      console.log(`Verified storage: ${verifyMessages ? 'success' : 'failed'}, storage size: ${verifyMessages?.length || 0} chars`);
+    } catch (e) {
+      console.error('Storage verification failed:', e);
+    }
     
     // If user is signed in, also save to user's messages
     if (userId) {
@@ -138,6 +147,14 @@ export const getMessage = (id: string): MessageData | undefined => {
     // Get all messages for debugging
     const allMessages = getAllMessages();
     console.log(`Found ${allMessages.length} messages in localStorage`);
+    
+    // Dump the raw localStorage value for debugging
+    try {
+      const raw = localStorage.getItem('secureMessages');
+      console.log(`Raw 'secureMessages' in localStorage: ${raw ? 'found' : 'not found'}, length: ${raw?.length || 0}`);
+    } catch (e) {
+      console.error('Error accessing raw localStorage:', e);
+    }
     
     if (allMessages.length > 0) {
       console.log(`Available message IDs: ${allMessages.map(m => m.id).join(', ')}`);
@@ -407,16 +424,19 @@ export const cleanupExpiredMessages = () => {
     
     console.log(`Cleaning up expired messages: ${deletedCount} expired out of ${messages.length} total`);
     
-    // Filter out expired messages from global storage
-    const validMessages = messages.filter(message => !isMessageExpired(message));
-    localStorage.setItem('secureMessages', JSON.stringify(validMessages));
-    
-    // Also clean up user-specific storage
-    const userId = getUserId();
-    if (userId) {
-      const userMessages = getUserMessages();
-      const validUserMessages = userMessages.filter(message => !isMessageExpired(message));
-      localStorage.setItem(`userMessages_${userId}`, JSON.stringify(validUserMessages));
+    // Only filter if we actually found expired messages
+    if (deletedCount > 0) {
+      // Filter out expired messages from global storage
+      const validMessages = messages.filter(message => !isMessageExpired(message));
+      localStorage.setItem('secureMessages', JSON.stringify(validMessages));
+      
+      // Also clean up user-specific storage
+      const userId = getUserId();
+      if (userId) {
+        const userMessages = getUserMessages();
+        const validUserMessages = userMessages.filter(message => !isMessageExpired(message));
+        localStorage.setItem(`userMessages_${userId}`, JSON.stringify(validUserMessages));
+      }
     }
     
     return deletedCount;
@@ -688,12 +708,20 @@ export const clearMessageCache = (preserveUserData: boolean = true): number => {
           if (Array.isArray(messages)) {
             const initialCount = messages.length;
             const validMessages = messages.filter(message => !isMessageExpired(message));
+            
+            // Only update storage if we actually removed something
             if (validMessages.length < initialCount) {
               localStorage.setItem('secureMessages', JSON.stringify(validMessages));
               clearedItems += (initialCount - validMessages.length);
-              console.log(`Removed ${initialCount - validMessages.length} expired messages`);
+              console.log(`Removed ${initialCount - validMessages.length} expired messages, ${validMessages.length} remaining`);
+            } else {
+              console.log(`No expired messages found among ${initialCount} messages`);
             }
           }
+        } else {
+          // Initialize empty array if no messages exist
+          localStorage.setItem('secureMessages', '[]');
+          console.log("Initialized empty messages array");
         }
       } catch (e) {
         console.error("Error cleaning up expired messages:", e);
@@ -710,7 +738,8 @@ export const clearMessageCache = (preserveUserData: boolean = true): number => {
       clearedItems++;
     } else {
       // Clean up orphaned keys (keys without corresponding messages)
-      cleanupOrphanedKeys();
+      const orphanedKeyCount = cleanupOrphanedKeys();
+      clearedItems += orphanedKeyCount;
     }
     
     // If we're not preserving user data, clear user-specific message storage
@@ -762,6 +791,15 @@ export const performPeriodicCacheCleanup = (): void => {
       localStorage.setItem('lastCacheCleanup', currentTime.toString());
       
       console.log(`Periodic cleanup complete. Removed ${expiredCount} expired messages and ${orphanedKeyCount} orphaned keys.`);
+    } else {
+      console.log("Skipping periodic cleanup, last cleanup was recent");
+    }
+    
+    // Check if 'secureMessages' exists and initialize if not
+    const messagesStr = localStorage.getItem('secureMessages');
+    if (!messagesStr) {
+      localStorage.setItem('secureMessages', '[]');
+      console.log("Initialized empty secureMessages array during cleanup");
     }
   } catch (error) {
     console.error('Error in periodic cache cleanup:', error);

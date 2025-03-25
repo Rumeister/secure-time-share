@@ -145,7 +145,8 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
   };
   
   const handleClearCache = () => {
-    const clearedItems = clearMessageCache(false);
+    // Clear all messages but preserve user data
+    const clearedItems = clearMessageCache(true);
     toast.success(`Cleared message cache (${clearedItems} items removed)`);
     refreshStorage();
   };

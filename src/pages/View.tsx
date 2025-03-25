@@ -16,8 +16,8 @@ const View = () => {
     // Force a fresh page reload if requested via query param
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('clear-cache') === 'true') {
-      const clearedItems = clearMessageCache(false); // Don't clear everything!
-      toast.success(`Cache cleared (${clearedItems} items removed)`);
+      const clearedItems = clearMessageCache(true); // Preserve valid messages
+      toast.success(`Cache cleared (${clearedItems} expired items removed)`);
     }
   }, []);
 

@@ -33,11 +33,10 @@ const ViewMessage = () => {
   };
   
   const handleClearCache = () => {
-    // Get cache clear mode: if we're getting an error, clear everything
-    const aggressive = !!error;
-    const clearedItems = clearMessageCache(!aggressive);
+    // Only clear expired messages by default (preserveUserData=true)
+    const clearedItems = clearMessageCache(true);
     
-    toast.success(`Cleared message cache (${clearedItems} items removed)`);
+    toast.success(`Cleared expired messages (${clearedItems} items removed)`);
     
     // Reload the page with a clean URL (but preserve the message ID and key in hash)
     const { pathname } = window.location;

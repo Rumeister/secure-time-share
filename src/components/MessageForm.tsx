@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LockKeyhole, Copy, Check, Clock, Eye, Users, Link } from "lucide-react";
@@ -35,7 +34,7 @@ import {
   exportKey, 
   generateToken 
 } from "@/lib/encryption";
-import { saveMessage, getUserId } from "@/lib/storage";
+import { saveMessage, getUserId, storeEncryptionKey } from "@/lib/storage";
 import { useUser } from "@clerk/clerk-react";
 
 interface UserShareFormProps {
@@ -196,15 +195,34 @@ const MessageForm = () => {
         }
       }
       
-      // Save the encrypted message to storage
-      saveMessage({
+      // Create the message object
+      const messageObj = {
         id,
         encryptedContent: encrypted,
         expiresAt,
         maxViews,
         currentViews: 0,
         createdAt: Date.now(),
-      });
+      };
+      
+      // Save the encrypted message to storage
+      const success = saveMessage(messageObj);
+      
+      if (!success) {
+        throw new Error("Failed to save message to storage");
+      }
+      
+      console.log(`Message created with ID ${id}, checking storage...`);
+      try {
+        // Verify the message was saved correctly
+        const savedMessage = localStorage.getItem('secureMessages');
+        console.log(`Storage after saving: ${savedMessage ? 'contains data' : 'empty'}, length: ${savedMessage?.length || 0}`);
+        
+        // Store the encryption key for future access
+        storeEncryptionKey(id, keyString);
+      } catch (e) {
+        console.error("Error verifying message storage:", e);
+      }
       
       // Generate share link with the key in the fragment
       // Use origin to ensure we get the proper base URL

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Bug, Database, RefreshCw, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,35 +32,28 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
   const hasErrors = debugInfo.some(log => log.toLowerCase().includes("error"));
   const hasWarnings = debugInfo.some(log => log.toLowerCase().includes("warning"));
   
-  // Get the variant based on log content
   const getButtonVariant = () => {
     if (hasErrors) return "destructive";
     if (hasWarnings) return "outline";
     return "ghost";
   };
   
-  // Count the number of errors and warnings
   const errorCount = debugInfo.filter(log => log.toLowerCase().includes("error")).length;
   const warningCount = debugInfo.filter(log => log.toLowerCase().includes("warning")).length;
 
-  // Update logs when debugInfo changes
   useEffect(() => {
     setLogs(debugInfo);
   }, [debugInfo]);
 
-  // Clear logs
   const handleClearLogs = () => {
     setLogs([]);
     toast.success("Debug logs cleared");
   };
 
-  // Update storage stats periodically
   useEffect(() => {
     const updateStorageInfo = () => {
-      // Get basic storage stats 
       const stats = getStorageStats();
       
-      // Get message IDs
       const messagesStr = localStorage.getItem('secureMessages');
       let messageIds: string[] = [];
       let rawContent = null;
@@ -72,16 +64,20 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
           const messages = JSON.parse(messagesStr);
           if (Array.isArray(messages)) {
             messageIds = messages.map(m => m.id);
+            console.log(`Found ${messages.length} messages in localStorage debug check`);
+          } else {
+            console.warn("secureMessages is not an array in debug check");
+            rawContent = "ERROR: secureMessages is not an array: " + messagesStr;
           }
         } else {
           rawContent = "null";
+          console.warn("secureMessages is null in debug check");
         }
       } catch (e) {
         console.error("Error parsing messages:", e);
         rawContent = "ERROR: " + String(e);
       }
       
-      // Get key IDs
       const keysStr = localStorage.getItem('secureMessageKeys');
       let keyIds: string[] = [];
       try {
@@ -101,7 +97,6 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
       });
     };
     
-    // Update immediately and then every 2 seconds if debug panel is open
     updateStorageInfo();
     
     let interval: number | null = null;
@@ -117,10 +112,8 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
   }, [showDebug]);
   
   const refreshStorage = () => {
-    // Get basic storage stats 
     const stats = getStorageStats();
     
-    // Get message IDs
     const messagesStr = localStorage.getItem('secureMessages');
     let messageIds: string[] = [];
     let rawContent = null;
@@ -131,16 +124,20 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
         const messages = JSON.parse(messagesStr);
         if (Array.isArray(messages)) {
           messageIds = messages.map(m => m.id);
+          console.log(`Found ${messages.length} messages in localStorage debug check`);
+        } else {
+          console.warn("secureMessages is not an array in debug check");
+          rawContent = "ERROR: secureMessages is not an array: " + messagesStr;
         }
       } else {
         rawContent = "null";
+        console.warn("secureMessages is null in debug check");
       }
     } catch (e) {
       console.error("Error parsing messages:", e);
       rawContent = "ERROR: " + String(e);
     }
     
-    // Get key IDs
     const keysStr = localStorage.getItem('secureMessageKeys');
     let keyIds: string[] = [];
     try {
@@ -163,7 +160,6 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
   };
   
   const handleClearCache = () => {
-    // Clear all messages but preserve user data
     const clearedItems = clearMessageCache(true);
     toast.success(`Cleared message cache (${clearedItems} items removed)`);
     refreshStorage();
@@ -174,8 +170,33 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
       localStorage.setItem('secureMessages', '[]');
       toast.success("Initialized empty secureMessages array");
     } else {
-      toast.info("secureMessages already exists");
+      const messagesStr = localStorage.getItem('secureMessages');
+      try {
+        if (messagesStr) {
+          const messages = JSON.parse(messagesStr);
+          if (Array.isArray(messages)) {
+            console.log(`secureMessages already exists with ${messages.length} items`);
+            toast.info(`secureMessages already exists with ${messages.length} items`);
+          } else {
+            console.warn("secureMessages is not an array, resetting");
+            localStorage.setItem('secureMessages', '[]');
+            toast.warning("secureMessages was not an array, reset to empty array");
+          }
+        }
+      } catch (e) {
+        console.error("Error checking secureMessages:", e);
+        localStorage.setItem('secureMessages', '[]');
+        toast.error("Error parsing secureMessages, reset to empty array");
+      }
     }
+    refreshStorage();
+  };
+  
+  const resetStorage = () => {
+    localStorage.setItem('secureMessages', '[]');
+    localStorage.setItem('secureMessageKeys', '{}');
+    localStorage.removeItem('lastCacheCleanup');
+    toast.success("Storage reset to default empty state");
     refreshStorage();
   };
   
@@ -200,7 +221,6 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
       
       <CollapsibleContent>
         <div className="mb-4 p-3 bg-black/5 rounded text-xs">
-          {/* Storage stats for debugging */}
           <div className="flex items-center justify-between mb-2 text-sm border-b pb-2">
             <div className="flex items-center">
               <Database className="h-3.5 w-3.5 mr-1" />
@@ -217,10 +237,13 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
                 <Trash2 className="h-3 w-3 mr-1" /> 
                 <span className="text-xs">Clear Cache</span>
               </Button>
+              <Button variant="destructive" size="sm" onClick={resetStorage} className="h-6" title="Reset storage completely">
+                <Trash2 className="h-3 w-3 mr-1" /> 
+                <span className="text-xs">Reset All</span>
+              </Button>
             </div>
           </div>
           
-          {/* Raw localStorage content */}
           {storageInfo.rawContent && (
             <div className="mb-2 text-xs">
               <div className="font-medium mb-1">Raw secureMessages content:</div>
@@ -230,7 +253,6 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
             </div>
           )}
           
-          {/* Message IDs */}
           {storageInfo.messageIds.length > 0 && (
             <div className="mb-2 text-xs">
               <div className="font-medium mb-1">Message IDs:</div>
@@ -244,7 +266,6 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
             </div>
           )}
           
-          {/* Key IDs */}
           {storageInfo.keyIds.length > 0 && (
             <div className="mb-2 text-xs">
               <div className="font-medium mb-1">Key IDs:</div>
@@ -260,7 +281,6 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
           
           <Separator className="my-2" />
           
-          {/* Debug logs with better styling */}
           <div className="flex items-center justify-between mb-1">
             <div className="font-medium">Debug Logs:</div>
             <Button 

@@ -18,6 +18,7 @@ const getAllMessages = (): MessageData[] => {
     const messagesString = localStorage.getItem('secureMessages');
     if (!messagesString) {
       console.log("No 'secureMessages' found in localStorage");
+      localStorage.setItem('secureMessages', '[]');
       return [];
     }
     
@@ -28,10 +29,17 @@ const getAllMessages = (): MessageData[] => {
       return [];
     }
     
+    if (messages.length === 0) {
+      console.log("'secureMessages' is an empty array");
+    } else {
+      console.log(`Retrieved ${messages.length} messages from localStorage`);
+    }
+    
     return messages;
   } catch (error) {
     console.error('Error getting messages:', error);
     // Reset the storage if there's corruption
+    console.warn("Error parsing messages, resetting storage to empty array");
     localStorage.setItem('secureMessages', '[]');
     return [];
   }
@@ -66,12 +74,13 @@ export const saveMessage = (message: MessageData) => {
     // Store the updated messages
     const messagesJson = JSON.stringify(messages);
     localStorage.setItem('secureMessages', messagesJson);
-    console.log(`Message ${message.id} saved successfully, storage size: ${messagesJson.length} chars`);
+    console.log(`Message ${message.id} saved successfully, storage size: ${messagesJson.length} chars, total messages: ${messages.length}`);
     
     // Force flush to localStorage to ensure persistence
     try {
       const verifyMessages = localStorage.getItem('secureMessages');
-      console.log(`Verified storage: ${verifyMessages ? 'success' : 'failed'}, storage size: ${verifyMessages?.length || 0} chars`);
+      const parsedMessages = verifyMessages ? JSON.parse(verifyMessages) : [];
+      console.log(`Verified storage: ${verifyMessages ? 'success' : 'failed'}, storage size: ${verifyMessages?.length || 0} chars, message count: ${parsedMessages.length}`);
     } catch (e) {
       console.error('Storage verification failed:', e);
     }
@@ -152,6 +161,14 @@ export const getMessage = (id: string): MessageData | undefined => {
     try {
       const raw = localStorage.getItem('secureMessages');
       console.log(`Raw 'secureMessages' in localStorage: ${raw ? 'found' : 'not found'}, length: ${raw?.length || 0}`);
+      
+      if (raw && raw.length < 5) {
+        console.warn(`'secureMessages' might be corrupted, content: ${raw}`);
+      }
+      
+      if (raw === '[]') {
+        console.warn("'secureMessages' is an empty array, no messages found");
+      }
     } catch (e) {
       console.error('Error accessing raw localStorage:', e);
     }
@@ -683,7 +700,7 @@ export const getStorageStats = () => {
 
 /**
  * Clears all message-related data from localStorage
- * @param preserveUserData If true, preserves user-specific data
+ * @param preserveUserData If true, preserves user-specific data and valid messages
  * @returns The number of items cleared
  */
 export const clearMessageCache = (preserveUserData: boolean = true): number => {
@@ -698,6 +715,8 @@ export const clearMessageCache = (preserveUserData: boolean = true): number => {
     if (!preserveUserData) {
       console.log("Clearing all messages from localStorage");
       localStorage.removeItem('secureMessages');
+      // Initialize empty array to prevent null issues
+      localStorage.setItem('secureMessages', '[]');
       clearedItems++;
     } else {
       console.log("Preserving valid messages, only cleaning expired ones");
@@ -717,11 +736,15 @@ export const clearMessageCache = (preserveUserData: boolean = true): number => {
             } else {
               console.log(`No expired messages found among ${initialCount} messages`);
             }
+          } else {
+            // Initialize empty array if content is not an array
+            localStorage.setItem('secureMessages', '[]');
+            console.log("Initialized empty messages array (content was not an array)");
           }
         } else {
           // Initialize empty array if no messages exist
           localStorage.setItem('secureMessages', '[]');
-          console.log("Initialized empty messages array");
+          console.log("Initialized empty messages array (no messages existed)");
         }
       } catch (e) {
         console.error("Error cleaning up expired messages:", e);
@@ -800,6 +823,21 @@ export const performPeriodicCacheCleanup = (): void => {
     if (!messagesStr) {
       localStorage.setItem('secureMessages', '[]');
       console.log("Initialized empty secureMessages array during cleanup");
+    } else if (messagesStr === '[]') {
+      console.log("secureMessages exists but is empty array");
+    } else {
+      try {
+        const parsedMessages = JSON.parse(messagesStr);
+        if (Array.isArray(parsedMessages)) {
+          console.log(`secureMessages contains ${parsedMessages.length} messages`);
+        } else {
+          console.warn("secureMessages does not contain an array, resetting");
+          localStorage.setItem('secureMessages', '[]');
+        }
+      } catch (e) {
+        console.warn("Error parsing secureMessages, resetting to empty array");
+        localStorage.setItem('secureMessages', '[]');
+      }
     }
   } catch (error) {
     console.error('Error in periodic cache cleanup:', error);

@@ -51,10 +51,15 @@ export const getAllMessages = (): MessageData[] => {
 };
 
 /**
- * Saves a message to localStorage
+ * Saves a message to localStorage with verification
  */
-export const saveMessage = (message: MessageData) => {
+export const saveMessage = (message: MessageData): boolean => {
   try {
+    if (!message || !message.id || !message.encryptedContent) {
+      console.error("Invalid message object provided to saveMessage");
+      return false;
+    }
+    
     // Add owner ID if user is signed in
     const userId = getUserId();
     if (userId) {
@@ -64,6 +69,7 @@ export const saveMessage = (message: MessageData) => {
     // Log the message being saved for debugging
     console.log(`Saving message with ID: ${message.id}, expires: ${message.expiresAt ? new Date(message.expiresAt).toLocaleString() : 'never'}, maxViews: ${message.maxViews || 'unlimited'}`);
     
+    // Make new copy of all existing messages
     const messages = getAllMessages();
     
     // Check if message with this ID already exists and update it instead
@@ -76,8 +82,8 @@ export const saveMessage = (message: MessageData) => {
       console.log(`Added new message ${message.id}`);
     }
     
-    // Store the updated messages
-    const messagesJson = JSON.stringify(messages);
+    // Store the updated messages - forcing proper JSON with replacer function
+    const messagesJson = JSON.stringify(messages, null, 0);
     
     // Make sure we're not storing an empty array string
     if (messagesJson === '[]' && messages.length > 0) {
@@ -85,40 +91,42 @@ export const saveMessage = (message: MessageData) => {
       return false;
     }
     
+    // CRITICAL: Save to localStorage
     localStorage.setItem('secureMessages', messagesJson);
-    console.log(`Message ${message.id} saved successfully, storage size: ${messagesJson.length} chars, total messages: ${messages.length}`);
     
-    // Force flush to localStorage to ensure persistence
-    try {
-      const verifyMessages = localStorage.getItem('secureMessages');
-      if (!verifyMessages || verifyMessages === '[]') {
-        console.error("ERROR: Messages not saved properly to localStorage!");
-        
-        // Try one more time with a more direct approach
-        const directSave = JSON.stringify([message]);
-        localStorage.setItem('secureMessages', directSave);
-        
-        const secondVerify = localStorage.getItem('secureMessages');
-        if (!secondVerify || secondVerify === '[]') {
-          console.error("ERROR: Second attempt to save messages failed!");
-          return false;
-        } else {
-          console.log("Second attempt to save messages succeeded");
-        }
-      }
-      
-      const parsedMessages = verifyMessages ? JSON.parse(verifyMessages) : [];
-      console.log(`Verified storage: ${verifyMessages ? 'success' : 'failed'}, storage size: ${verifyMessages?.length || 0} chars, message count: ${parsedMessages.length}`);
-      
-      // Final verification
-      if (parsedMessages.length === 0 && messages.length > 0) {
-        console.error("ERROR: Verification shows 0 messages when we should have some!");
-        return false;
-      }
-    } catch (e) {
-      console.error('Storage verification failed:', e);
+    // Verify the save was successful by reading it back
+    const verifyMessagesStr = localStorage.getItem('secureMessages');
+    
+    // Perform verification checks
+    if (!verifyMessagesStr) {
+      console.error("ERROR: Failed to save messages to localStorage - value is null!");
       return false;
     }
+    
+    if (verifyMessagesStr === '[]' && messages.length > 0) {
+      console.error("ERROR: After save, localStorage contains empty array when it should have messages!");
+      
+      // Try one more extreme approach - save directly
+      try {
+        // Direct single-message save as last resort
+        const singleMessageJson = JSON.stringify([message]);
+        localStorage.setItem('secureMessages', singleMessageJson);
+        console.log("Attempted direct save of single message as fallback");
+        
+        // Final verification
+        const finalCheck = localStorage.getItem('secureMessages');
+        if (!finalCheck || finalCheck === '[]') {
+          console.error("ERROR: Final attempt to save message failed!");
+          return false;
+        }
+      } catch (e) {
+        console.error("ERROR: Failed in final save attempt", e);
+        return false;
+      }
+    }
+    
+    // Log successful save details
+    console.log(`Message ${message.id} saved successfully, storage size: ${verifyMessagesStr.length} chars, total messages: ${messages.length}`);
     
     // If user is signed in, also save to user's messages
     if (userId) {
@@ -132,10 +140,31 @@ export const saveMessage = (message: MessageData) => {
       localStorage.setItem(`userMessages_${userId}`, JSON.stringify(userMessages));
     }
     
+    // Store the encryption key for future access if one is provided
+    storeMessageKey(message.id);
+    
     return true;
   } catch (error) {
     console.error('Error saving message:', error);
     return false;
+  }
+};
+
+/**
+ * Store the encryption key for the message after creation
+ */
+const storeMessageKey = (messageId: string): void => {
+  if (!messageId) return;
+  
+  try {
+    // Try to get the key from the URL hash
+    const urlHash = window.location.hash;
+    if (urlHash && urlHash.length > 1) {
+      const key = urlHash.substring(1);
+      storeEncryptionKey(messageId, key);
+    }
+  } catch (e) {
+    console.error("Failed to auto-store key from URL hash", e);
   }
 };
 
@@ -978,3 +1007,7 @@ export function forceReloadStorage(): boolean {
     return false;
   }
 }
+
+/**
+
+

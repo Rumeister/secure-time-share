@@ -7,7 +7,8 @@ import {
   performPeriodicCacheCleanup, 
   clearMessageCache, 
   forceReloadStorage,
-  getAllMessages
+  getAllMessages,
+  initializeStorage
 } from "@/lib/storage";
 import { toast } from "sonner";
 
@@ -15,37 +16,22 @@ const View = () => {
   useEffect(() => {
     console.log("View page loaded, initializing storage and running cleanup");
     
-    // Ensure secureMessages exists in localStorage (BEFORE any cleanup)
-    if (!localStorage.getItem('secureMessages')) {
-      localStorage.setItem('secureMessages', '[]');
-      console.log("Initialized empty secureMessages array");
-    } else {
-      try {
-        const messagesStr = localStorage.getItem('secureMessages');
-        if (messagesStr) {
-          if (messagesStr === '[]') {
-            console.log("secureMessages is an empty array");
-          } else {
-            const messages = JSON.parse(messagesStr);
-            if (Array.isArray(messages)) {
-              console.log(`Found ${messages.length} messages in localStorage`);
-            } else {
-              console.warn("secureMessages is not an array, resetting");
-              localStorage.setItem('secureMessages', '[]');
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Error checking secureMessages:", e);
-        localStorage.setItem('secureMessages', '[]');
-      }
+    // First initialize storage to ensure it exists
+    const initialized = initializeStorage();
+    if (!initialized) {
+      console.warn("Storage initialization failed, retrying...");
+      // Try again with forced cleanup
+      setTimeout(() => {
+        initializeStorage();
+      }, 100);
     }
     
-    // Check if we have messages but they're not being found
+    // Check messages after initialization
     const messages = getAllMessages();
     if (messages.length === 0) {
-      // Try to force reload storage to fix potential issues
-      forceReloadStorage();
+      console.log("Found 0 messages in localStorage");
+    } else {
+      console.log(`Found ${messages.length} messages in localStorage`);
     }
     
     // Run more comprehensive cache cleanup on page load

@@ -167,6 +167,11 @@ const MessageForm = () => {
     setLoading(true);
     
     try {
+      // First, ensure storage is initialized
+      import("@/lib/storage").then(storage => {
+        storage.initializeStorage();
+      });
+      
       // Generate encryption key
       const key = await generateKey();
       const keyString = await exportKey(key);
@@ -210,16 +215,21 @@ const MessageForm = () => {
       const success = saveMessage(messageObj);
       
       if (!success) {
-        throw new Error("Failed to save message to storage");
+        console.error("Failed to save message to storage");
+        toast.error("Error saving your message. Please try again.");
+        setLoading(false);
+        return;
       }
       
       console.log(`Message created with ID ${id}, checking storage...`);
+      
+      // Verify the message was saved correctly
       try {
-        // Verify the message was saved correctly
+        // Verify in localStorage
         const savedMessage = localStorage.getItem('secureMessages');
         console.log(`Storage after saving: ${savedMessage ? 'contains data' : 'empty'}, length: ${savedMessage?.length || 0}`);
         
-        // Force reload of messages to verify
+        // Check if the message is actually stored
         const allMessages = getAllMessages();
         console.log(`Retrieved ${allMessages.length} messages after saving, message exists: ${
           allMessages.some(m => m.id === id) ? 'yes' : 'no'
@@ -227,9 +237,25 @@ const MessageForm = () => {
         
         if (allMessages.length === 0 || !allMessages.some(m => m.id === id)) {
           console.error("Message was not properly saved to storage!");
-          toast.error("Error: Message was not properly saved. Please try again.");
-          setLoading(false);
-          return;
+          
+          // Try an emergency direct save
+          try {
+            localStorage.setItem('secureMessages', JSON.stringify([messageObj]));
+            console.log("Attempted emergency direct save of message");
+            
+            // Check if it worked
+            const emergencyCheck = localStorage.getItem('secureMessages');
+            if (!emergencyCheck || emergencyCheck === '[]') {
+              toast.error("Storage error: Could not save your message. Please try again.");
+              setLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.error("Emergency storage attempt failed:", e);
+            toast.error("Storage error: Could not save your message. Please try again.");
+            setLoading(false);
+            return;
+          }
         }
         
         // Store the encryption key for future access
@@ -242,7 +268,6 @@ const MessageForm = () => {
       }
       
       // Generate share link with the key in the fragment
-      // Use origin to ensure we get the proper base URL
       const baseUrl = window.location.origin;
       const shareUrl = `${baseUrl}/view/${id}#${keyString}`;
       
@@ -260,6 +285,9 @@ const MessageForm = () => {
       
       // Reset form
       setMessage("");
+      
+      // Success notification
+      toast.success("Secure message created successfully!");
     } catch (error) {
       console.error("Error creating message:", error);
       toast.error("Failed to create secure message. Please try again.");

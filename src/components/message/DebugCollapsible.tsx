@@ -188,35 +188,15 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
   };
   
   const initializeStorage = () => {
-    if (!localStorage.getItem('secureMessages')) {
-      localStorage.setItem('secureMessages', '[]');
-      toast.success("Initialized empty secureMessages array");
-    } else {
-      const messagesStr = localStorage.getItem('secureMessages');
-      try {
-        if (messagesStr) {
-          if (messagesStr === '[]') {
-            console.log("secureMessages already exists as empty array");
-            toast.info("secureMessages already exists as empty array");
-          } else {
-            const messages = JSON.parse(messagesStr);
-            if (Array.isArray(messages)) {
-              console.log(`secureMessages already exists with ${messages.length} items`);
-              toast.info(`secureMessages already exists with ${messages.length} items`);
-            } else {
-              console.warn("secureMessages is not an array, resetting");
-              localStorage.setItem('secureMessages', '[]');
-              toast.warning("secureMessages was not an array, reset to empty array");
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Error checking secureMessages:", e);
-        localStorage.setItem('secureMessages', '[]');
-        toast.error("Error parsing secureMessages, reset to empty array");
+    import("@/lib/storage").then(storage => {
+      const initialized = storage.initializeStorage();
+      if (initialized) {
+        toast.success("Storage initialized successfully");
+      } else {
+        toast.error("Storage initialization failed");
       }
-    }
-    refreshStorage();
+      refreshStorage();
+    });
   };
   
   const resetStorage = () => {
@@ -225,6 +205,69 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
     localStorage.removeItem('lastCacheCleanup');
     toast.success("Storage reset to default empty state");
     refreshStorage();
+  };
+  
+  const testCreateMessage = () => {
+    // Create a simple test message directly
+    import("@/lib/encryption").then(async (encryption) => {
+      import("@/lib/storage").then(async (storage) => {
+        try {
+          // Generate a key and ID
+          const key = await encryption.generateKey();
+          const keyString = await encryption.exportKey(key);
+          const id = encryption.generateToken();
+          
+          // Create a simple encrypted message
+          const encrypted = await encryption.encryptMessage("Test message created at " + new Date().toLocaleString(), key);
+          
+          // Create message object
+          const messageObj = {
+            id,
+            encryptedContent: encrypted,
+            expiresAt: null,
+            maxViews: 3,
+            currentViews: 0,
+            createdAt: Date.now(),
+          };
+          
+          // Save it
+          const success = storage.saveMessage(messageObj);
+          
+          if (success) {
+            // Store the key
+            storage.storeEncryptionKey(id, keyString);
+            
+            // Verify it exists
+            const allMessages = storage.getAllMessages();
+            if (allMessages.some(m => m.id === id)) {
+              toast.success(`Test message created with ID: ${id}`);
+              
+              // Create a link for testing
+              const baseUrl = window.location.origin;
+              const testLink = `${baseUrl}/view/${id}#${keyString}`;
+              
+              // Copy to clipboard
+              navigator.clipboard.writeText(testLink)
+                .then(() => toast.success("Test link copied to clipboard!"))
+                .catch(() => toast.error("Failed to copy link"));
+              
+              // Add to logs
+              setLogs(prev => [...prev, `SUCCESS: Created test message with ID ${id}`]);
+              setLogs(prev => [...prev, `INFO: Test link: ${testLink}`]);
+            } else {
+              toast.error("Test message creation failed - not found after save");
+            }
+          } else {
+            toast.error("Failed to save test message");
+          }
+          
+          refreshStorage();
+        } catch (e) {
+          console.error("Error creating test message:", e);
+          toast.error("Error creating test message");
+        }
+      });
+    });
   };
   
   return (
@@ -256,6 +299,9 @@ const DebugCollapsible = ({ debugInfo }: DebugCollapsibleProps) => {
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={initializeStorage} className="h-6" title="Initialize storage">
                 <span className="text-xs">Init Storage</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={testCreateMessage} className="h-6" title="Create test message">
+                <span className="text-xs">Test Message</span>
               </Button>
               <Button variant="ghost" size="sm" onClick={handleForceReload} className="h-6" title="Force reload storage">
                 <Save className="h-3 w-3 mr-1" />

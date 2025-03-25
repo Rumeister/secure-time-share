@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import ViewMessage from "@/components/ViewMessage";
 import Layout from "@/components/Layout";
-import { cleanupExpiredMessages, performPeriodicCacheCleanup } from "@/lib/storage";
+import { cleanupExpiredMessages, performPeriodicCacheCleanup, clearMessageCache } from "@/lib/storage";
 import { toast } from "sonner";
 
 const View = () => {

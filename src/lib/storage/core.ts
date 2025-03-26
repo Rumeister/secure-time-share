@@ -2,6 +2,33 @@
 import { MessageData } from './types';
 
 /**
+ * Initializes the storage system
+ * Ensures that the basic storage containers exist
+ */
+export const initializeStorage = (): boolean => {
+  try {
+    // Check if 'secureMessages' exists and initialize if not
+    const messagesStr = localStorage.getItem('secureMessages');
+    if (!messagesStr) {
+      localStorage.setItem('secureMessages', '[]');
+      console.log("Initialized empty secureMessages array");
+    }
+    
+    // Check if 'secureMessageKeys' exists and initialize if not
+    const keysStr = localStorage.getItem('secureMessageKeys');
+    if (!keysStr) {
+      localStorage.setItem('secureMessageKeys', '{}');
+      console.log("Initialized empty secureMessageKeys object");
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error initializing storage:', error);
+    return false;
+  }
+};
+
+/**
  * Gets all messages from localStorage
  */
 export const getAllMessages = (): MessageData[] => {
@@ -59,43 +86,23 @@ export const getUserId = (): string | null => {
 };
 
 /**
- * Initialize storage to ensure it exists and is valid
+ * Gets all messages for the current user
  */
-export function initializeStorage(): boolean {
+export const getUserMessages = (): MessageData[] => {
+  const userId = getUserId();
+  if (!userId) return [];
+  
   try {
-    // Ensure secureMessages exists in localStorage
-    const messagesStr = localStorage.getItem('secureMessages');
-    if (!messagesStr) {
-      // Create it if it doesn't exist
-      localStorage.setItem('secureMessages', '[]');
-      console.log("Initialized empty secureMessages array");
-      return true;
-    } else if (messagesStr === '[]') {
-      // Already exists as empty array
-      console.log("secureMessages already exists as empty array");
-      return true;
-    } else {
-      // Try to parse it to make sure it's valid
-      try {
-        const parsed = JSON.parse(messagesStr);
-        if (!Array.isArray(parsed)) {
-          console.warn("secureMessages is not an array, resetting to empty array");
-          localStorage.setItem('secureMessages', '[]');
-        } else {
-          console.log(`secureMessages contains ${parsed.length} messages`);
-        }
-        return true;
-      } catch (e) {
-        console.error("Error parsing secureMessages, resetting:", e);
-        localStorage.setItem('secureMessages', '[]');
-        return false;
-      }
-    }
+    const userMessagesString = localStorage.getItem(`userMessages_${userId}`);
+    if (!userMessagesString) return [];
+    
+    const userMessages = JSON.parse(userMessagesString);
+    return Array.isArray(userMessages) ? userMessages : [];
   } catch (error) {
-    console.error('Error initializing storage:', error);
-    return false;
+    console.error('Error getting user messages:', error);
+    return [];
   }
-}
+};
 
 /**
  * Force reload storage
@@ -132,29 +139,3 @@ export function forceReloadStorage(): boolean {
     return false;
   }
 }
-
-/**
- * Get the total number of messages and keys in storage (for debugging)
- */
-export const getStorageStats = () => {
-  try {
-    const messages = getAllMessages();
-    
-    const keysStore = localStorage.getItem('secureMessageKeys') || '{}';
-    let keys = {};
-    try {
-      keys = JSON.parse(keysStore);
-    } catch (e) {
-      keys = {};
-    }
-    
-    return {
-      messages: messages.length,
-      keys: Object.keys(keys).length,
-      totalItems: localStorage.length
-    };
-  } catch (error) {
-    console.error('Error getting storage stats:', error);
-    return { messages: 0, keys: 0, totalItems: 0 };
-  }
-};

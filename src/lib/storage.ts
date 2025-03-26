@@ -1009,5 +1009,40 @@ export function forceReloadStorage(): boolean {
 }
 
 /**
-
-
+ * Initialize storage to ensure it exists and is valid
+ */
+export function initializeStorage(): boolean {
+  try {
+    // Ensure secureMessages exists in localStorage
+    const messagesStr = localStorage.getItem('secureMessages');
+    if (!messagesStr) {
+      // Create it if it doesn't exist
+      localStorage.setItem('secureMessages', '[]');
+      console.log("Initialized empty secureMessages array");
+      return true;
+    } else if (messagesStr === '[]') {
+      // Already exists as empty array
+      console.log("secureMessages already exists as empty array");
+      return true;
+    } else {
+      // Try to parse it to make sure it's valid
+      try {
+        const parsed = JSON.parse(messagesStr);
+        if (!Array.isArray(parsed)) {
+          console.warn("secureMessages is not an array, resetting to empty array");
+          localStorage.setItem('secureMessages', '[]');
+        } else {
+          console.log(`secureMessages contains ${parsed.length} messages`);
+        }
+        return true;
+      } catch (e) {
+        console.error("Error parsing secureMessages, resetting:", e);
+        localStorage.setItem('secureMessages', '[]');
+        return false;
+      }
+    }
+  } catch (error) {
+    console.error('Error initializing storage:', error);
+    return false;
+  }
+}

@@ -8,7 +8,8 @@ import {
   isMessageExpired, 
   deleteMessage, 
   getEncryptionKey, 
-  getStorageStats 
+  getStorageStats,
+  storeEncryptionKey
 } from "@/lib/storage";
 import { toast } from "sonner";
 

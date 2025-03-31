@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Bug, Database, RefreshCw, Trash2, X, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { getStorageStats, clearMessageCache, forceReloadStorage } from "@/lib/storage";
+import { getStorageStats, clearMessageCache, forceReloadStorage, initializeStorage } from "@/lib/storage";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 

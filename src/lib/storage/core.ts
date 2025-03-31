@@ -105,6 +105,32 @@ export const getUserMessages = (): MessageData[] => {
 };
 
 /**
+ * Get the total number of messages and keys in storage (for debugging)
+ */
+export const getStorageStats = () => {
+  try {
+    const messages = getAllMessages();
+    
+    const keysStore = localStorage.getItem('secureMessageKeys') || '{}';
+    let keys = {};
+    try {
+      keys = JSON.parse(keysStore);
+    } catch (e) {
+      keys = {};
+    }
+    
+    return {
+      messages: messages.length,
+      keys: Object.keys(keys).length,
+      totalItems: localStorage.length
+    };
+  } catch (error) {
+    console.error('Error getting storage stats:', error);
+    return { messages: 0, keys: 0, totalItems: 0 };
+  }
+};
+
+/**
  * Force reload storage
  */
 export function forceReloadStorage(): boolean {

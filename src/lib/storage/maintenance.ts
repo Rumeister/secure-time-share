@@ -1,6 +1,5 @@
-
-import { getAllMessages, getUserId } from './core';
-import { isMessageExpired, getUserMessages } from './messages';
+import { getAllMessages, getUserId, getUserMessages } from './core';
+import { isMessageExpired } from './messages';
 import { cleanupOrphanedKeys } from './keys';
 
 /**
